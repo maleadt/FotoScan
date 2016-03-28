@@ -8,7 +8,9 @@ CXXFLAGS += -std=c++11 -g
 
 .PHONY: all clean
 
+main: clip.o
+
 all: main
 
 clean:
-	$(RM) main
+	$(RM) main clip.o

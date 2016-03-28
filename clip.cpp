@@ -2,6 +2,11 @@
 //
 // http://rosettacode.org/wiki/Sutherland-Hodgman_polygon_clipping
 
+#include "clip.hpp"
+
+using namespace cv;
+using namespace std;
+
 // tells if Point c lies on the left side of directed edge a.b
 // 1 if left, -1 if right, 0 if colinear
 int left_of(Point a, Point b, Point c) {

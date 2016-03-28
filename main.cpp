@@ -3,14 +3,14 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include "clip.hpp"
+
 #include <iostream>
 #include <math.h>
 #include <string.h>
 
 using namespace cv;
 using namespace std;
-
-#include "clip.cpp"
 
 int thresh = 50, N = 11;
 const char *wndname = "Picture Detection";
