@@ -120,7 +120,6 @@ static vector<vector<Point>> findSquares(const Mat &image) {
     // partition squares based on the area of their intersection
     vector<int> labels;
     int groups = partition(squares, labels, cmp_pictures);
-    cout << "Reduced " << squares.size() << " groups to " << groups << endl;
     vector<vector<Point>> grouped_squares(groups);
 
     // reduce to groups, selecting the _smallest_ image
