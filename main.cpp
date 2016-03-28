@@ -1,4 +1,5 @@
 #include <opencv2/core/core.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -8,6 +9,8 @@
 
 using namespace cv;
 using namespace std;
+
+#include "clip.cpp"
 
 int thresh = 50, N = 11;
 const char *wndname = "Picture Detection";
@@ -24,11 +27,21 @@ static double angle(Point pt1, Point pt2, Point pt0) {
            sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10);
 }
 
+bool cmp_pictures(const vector<Point> &a, const vector<Point> &b) {
+    auto clip = poly_clip(a, b);
+    if (clip.size() == 0)
+        return false;
+
+    auto a_a = contourArea(Mat(a));
+    auto a_b = contourArea(Mat(b));
+    auto a_clip = contourArea(Mat(clip));
+
+    return a_clip/MAX(a_a, a_b) > 0.95;
+}
+
 // returns sequence of squares detected on the image.
 // the sequence is stored in the specified memory storage
-static void findSquares(const Mat &image, vector<vector<Point>> &squares) {
-    squares.clear();
-
+static vector<vector<Point>> findSquares(const Mat &image) {
     Mat pyr, timg, gray0(image.size(), CV_8U), gray;
 
     // down-scale and upscale the image to filter out the noise
@@ -37,6 +50,7 @@ static void findSquares(const Mat &image, vector<vector<Point>> &squares) {
     vector<vector<Point>> contours;
 
     // find squares in every color plane of the image
+    vector<vector<Point>> squares;
     for (int c = 0; c < 3; c++) {
         int ch[] = {c, 0};
         mixChannels(&timg, 1, &gray0, 1, ch, 1);
@@ -71,15 +85,18 @@ static void findSquares(const Mat &image, vector<vector<Point>> &squares) {
                              arcLength(Mat(contours[i]), true) * 0.02, true);
 
                 // square contours should have 4 vertices after approximation
-                // relatively large area (to filter out noisy contours)
                 // and be convex.
-                // Note: absolute value of an area is used because
-                // area may be positive or negative - in accordance with the
-                // contour orientation
                 if (approx.size() == 4 &&
-                    fabs(contourArea(Mat(approx))) > 1000 &&
                     isContourConvex(Mat(approx))) {
                     double maxCosine = 0;
+
+                    // Filter on area
+                    // Note: absolute value of an area is used because
+                    // area may be positive or negative - in accordance with the
+                    // contour orientation
+                    auto area = fabs(contourArea(Mat(approx)));
+                    if (area < 500000 || area > 10000000)
+                        continue;
 
                     for (int j = 2; j < 5; j++) {
                         // find the maximum cosine of the angle between joint
@@ -89,15 +106,35 @@ static void findSquares(const Mat &image, vector<vector<Point>> &squares) {
                         maxCosine = MAX(maxCosine, cosine);
                     }
 
-                    // if cosines of all angles are small
-                    // (all angles are ~90 degree) then write quandrange
-                    // vertices to resultant sequence
-                    if (maxCosine < 0.3)
-                        squares.push_back(approx);
+                    // if cosines of all angles are small (angles should be ~90
+                    // degrees)
+                    if (maxCosine > 0.05)
+                        continue;
+
+                    squares.push_back(approx);
                 }
             }
         }
     }
+
+    // partition squares based on the area of their intersection
+    vector<int> labels;
+    int groups = partition(squares, labels, cmp_pictures);
+    cout << "Reduced " << squares.size() << " groups to " << groups << endl;
+    vector<vector<Point>> grouped_squares(groups);
+
+    // reduce to groups, selecting the _smallest_ image
+    // TODO: save alternatives, allow selection through GUI
+    for (int i = 0; i < squares.size(); i++) {
+        int group = labels[i];
+        if (grouped_squares[group].size() == 0)
+            grouped_squares[group] = squares[i];
+        else
+            if (contourArea(Mat(squares[i])) < contourArea(Mat(grouped_squares[group])))
+                grouped_squares[group] = squares[i];
+    }
+
+    return grouped_squares;
 }
 
 // the function draws all the squares in the image
@@ -112,9 +149,8 @@ static void drawSquares(Mat &image, const vector<vector<Point>> &squares) {
 }
 
 int main(int argc, char **argv) {
-    static const char *names[] = {"../test/DSC_1763.JPG", 0};
+    static const char *names[] = {"../boek1/front/DSC_1896.JPG", 0};
     namedWindow(wndname, WINDOW_NORMAL);
-    vector<vector<Point>> squares;
 
     for (int i = 0; names[i] != 0; i++) {
         Mat image = imread(names[i], 1);
@@ -123,7 +159,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        findSquares(image, squares);
+        auto squares = findSquares(image);
         drawSquares(image, squares);
 
         cout << "Press RETURN to continue" << endl;
