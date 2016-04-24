@@ -39,7 +39,7 @@ bool cmp_pictures(const Shape &a, const Shape &b) {
     auto a_b = contourArea(Mat(b));
     auto a_clip = contourArea(Mat(clip));
 
-    return a_clip/MAX(a_a, a_b) > 0.95;
+    return a_clip / MAX(a_a, a_b) > 0.95;
 }
 
 // returns sequence of contours detected in the image.
@@ -77,7 +77,8 @@ static ShapeList findContours(const Mat &image) {
             ShapeList contours;
             findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
 
-            all_contours.insert(all_contours.end(), contours.begin(), contours.end());
+            all_contours.insert(all_contours.end(), contours.begin(),
+                                contours.end());
         }
     }
 
@@ -98,8 +99,7 @@ static ShapeList filterSquares(const ShapeList &contours) {
 
         // square contours should have 4 vertices after approximation
         // and be convex.
-        if (approx.size() == 4 &&
-            isContourConvex(Mat(approx))) {
+        if (approx.size() == 4 && isContourConvex(Mat(approx))) {
             double maxCosine = 0;
 
             // Filter on area
@@ -113,8 +113,8 @@ static ShapeList filterSquares(const ShapeList &contours) {
             for (int j = 2; j < 5; j++) {
                 // find the maximum cosine of the angle between joint
                 // edges
-                double cosine = fabs(
-                    angle(approx[j % 4], approx[j - 2], approx[j - 1]));
+                double cosine =
+                    fabs(angle(approx[j % 4], approx[j - 2], approx[j - 1]));
                 maxCosine = MAX(maxCosine, cosine);
             }
 
@@ -142,9 +142,9 @@ static ShapeList minimizeSquares(const ShapeList &squares) {
         int group = labels[i];
         if (grouped_squares[group].size() == 0)
             grouped_squares[group] = squares[i];
-        else
-            if (contourArea(Mat(squares[i])) < contourArea(Mat(grouped_squares[group])))
-                grouped_squares[group] = squares[i];
+        else if (contourArea(Mat(squares[i])) <
+                 contourArea(Mat(grouped_squares[group])))
+            grouped_squares[group] = squares[i];
     }
 
     return grouped_squares;
@@ -181,7 +181,8 @@ int main(int argc, char **argv) {
         auto minsquares = minimizeSquares(squares);
 
         auto end = std::chrono::system_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         std::cout << " done after " << elapsed.count() << " ms!" << endl;
 
         drawSquares(image, minsquares);
