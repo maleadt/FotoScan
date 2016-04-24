@@ -3,6 +3,9 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <boost/program_options.hpp>
+#include <boost/optional.hpp>
+
 #include "clip.hpp"
 
 #include <iostream>
@@ -13,16 +16,16 @@
 
 using namespace cv;
 using namespace std;
+using namespace boost;
+namespace po = boost::program_options;
 
 int thresh = 50, N = 11;
-const char *wndname = "Picture Detection";
+const char *wndname = "Foto Scan";
 
 typedef vector<Point> Shape;
 typedef vector<Shape> ShapeList;
 
-// helper function:
-// finds a cosine of angle between vectors
-// from pt0->pt1 and from pt0->pt2
+// Finds a cosine of angle between vectors from pt0->pt1 and from pt0->pt2
 static double angle(Point pt1, Point pt2, Point pt0) {
     double dx1 = pt1.x - pt0.x;
     double dy1 = pt1.y - pt0.y;
@@ -32,19 +35,7 @@ static double angle(Point pt1, Point pt2, Point pt0) {
            sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10);
 }
 
-bool cmp_pictures(const Shape &a, const Shape &b) {
-    auto clip = poly_clip(a, b);
-    if (clip.size() == 0)
-        return false;
-
-    auto a_a = contourArea(Mat(a));
-    auto a_b = contourArea(Mat(b));
-    auto a_clip = contourArea(Mat(clip));
-
-    return a_clip / MAX(a_a, a_b) > 0.95;
-}
-
-// returns sequence of contours detected in the image.
+// Extract a sequence of contours detected in the image.
 static ShapeList extractContours(const Mat &image) {
     // down-scale and upscale the image to filter out the noise
     Mat pyr, timg;
@@ -92,9 +83,11 @@ static ShapeList extractContours(const Mat &image) {
     return all_contours;
 }
 
-// filter the squares from a list of contours
-static ShapeList filterSquares(const ShapeList &contours) {
-    ShapeList squares;
+// Filter the squares from a list of contours
+static ShapeList
+filterSquares(const ShapeList &contours,
+              optional<ShapeList &> rejects = optional<ShapeList &>()) {
+    ShapeList accepts;
 
     // test each contour
     #pragma omp parallel for
@@ -115,32 +108,53 @@ static ShapeList filterSquares(const ShapeList &contours) {
             // area may be positive or negative - in accordance with the
             // contour orientation
             auto area = fabs(contourArea(Mat(approx)));
+            if (area < 1000)
+                continue;   // truly-reject useless contours
             if (area < 500000 || area > 10000000)
-                continue;
+                goto reject;
 
             for (int j = 2; j < 5; j++) {
                 // find the maximum cosine of the angle between joint
                 // edges
                 double cosine =
                     fabs(angle(approx[j % 4], approx[j - 2], approx[j - 1]));
-                maxCosine = MAX(maxCosine, cosine);
+                maxCosine = max(maxCosine, cosine);
             }
 
             // if cosines of all angles are small (angles should be ~90
             // degrees)
-            if (maxCosine > 0.05)
-                continue;
+            if (maxCosine > 0.10)
+                goto reject;
 
             #pragma omp critical
-            squares.push_back(approx);
+            accepts.push_back(approx);
+            continue;
+
+        reject:
+            if (rejects) {
+            #pragma omp critical
+                (*rejects).push_back(approx);
+            }
         }
     }
 
-    return squares;
+    return accepts;
 }
 
+bool cmp_pictures(const Shape &a, const Shape &b) {
+    auto clip = poly_clip(a, b);
+    if (clip.size() == 0)
+        return false;
+
+    auto a_a = contourArea(Mat(a));
+    auto a_b = contourArea(Mat(b));
+    auto a_clip = contourArea(Mat(clip));
+
+    return a_clip / max(a_a, a_b) > 0.90;
+}
+
+// Partition squares based on the area of their intersection
 static ShapeList minimizeSquares(const ShapeList &squares) {
-    // partition squares based on the area of their intersection
     vector<int> labels;
     int groups = partition(squares, labels, cmp_pictures);
     ShapeList grouped_squares(groups);
@@ -159,19 +173,39 @@ static ShapeList minimizeSquares(const ShapeList &squares) {
     return grouped_squares;
 }
 
-// the function draws all the squares in the image
-static void drawSquares(Mat &image, const ShapeList &squares) {
+// Draw shapes in an image
+static void drawShapes(Mat &image, const ShapeList &squares,
+                       const Scalar color = Scalar(0, 255, 0)) {
     for (size_t i = 0; i < squares.size(); i++) {
         const Point *p = &squares[i][0];
         int n = (int)squares[i].size();
-        polylines(image, &p, &n, 1, true, Scalar(0, 255, 0), 3);
+        polylines(image, &p, &n, 1, true, color, 3);
     }
 
     imshow(wndname, image);
 }
 
 int main(int argc, char **argv) {
-    static const char *names[] = {"../fotos/boek1/front/DSC_1986.JPG", 0};
+    // Declare the supported options.
+    po::options_description desc("Allowed options");
+    bool show_rejects, show_ungrouped;
+    desc.add_options()
+        ("help", "produce help message")
+        ("show-rejects", po::bool_switch(&show_rejects), "show rejected contours")
+        ("show-ungrouped", po::bool_switch(&show_ungrouped), "show ungrouped contours")
+    ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 1;
+    }
+
+    static const char *names[] = {
+        "/home/tim/Bureaublad/Foto's/boek1/front/DSC_1986.JPG", 0};
     namedWindow(wndname, WINDOW_NORMAL);
 
 #if defined(_OPENMP)
@@ -190,15 +224,24 @@ int main(int argc, char **argv) {
         }
 
         auto contours = extractContours(image);
-        auto squares = filterSquares(contours);
+
+        ShapeList rejects;
+        auto squares = filterSquares(
+            contours, show_rejects ? optional<ShapeList &>(rejects)
+                                   : optional<ShapeList &>());
+
         auto minsquares = minimizeSquares(squares);
 
         auto end = std::chrono::system_clock::now();
         auto elapsed =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << " done after " << elapsed.count() << " ms!" << endl;
+        std::cout << " took " << elapsed.count() << " ms" << endl;
 
-        drawSquares(image, minsquares);
+        if (show_rejects)
+            drawShapes(image, rejects, Scalar(0, 0, 255));
+        if (show_ungrouped)
+            drawShapes(image, squares, Scalar(255, 0, 0));
+        drawShapes(image, minsquares);
 
         cout << "Press RETURN to continue" << endl;
         int c = waitKey(0);

@@ -2,6 +2,7 @@
 default: release
 
 LDLIBS   += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_objdetect
+LDLIBS   += -lboost_program_options
 
 CPPFLAGS += -Wall
 CXXFLAGS += -std=c++11
