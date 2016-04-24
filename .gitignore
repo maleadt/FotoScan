@@ -1,4 +1,6 @@
 *.o
 main
 core.*
-
+vgcore.*
+perf.data*
+*.sublime-*
