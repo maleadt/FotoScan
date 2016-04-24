@@ -177,15 +177,53 @@ static ShapeList minimizeSquares(const ShapeList &squares) {
     return grouped_squares;
 }
 
-// Draw shapes in an image
-static void drawShapes(Mat &image, const ShapeList &squares,
-                       const Scalar color = Scalar(0, 255, 0)) {
-    for (size_t i = 0; i < squares.size(); i++) {
-        const Point *p = &squares[i][0];
-        int n = (int)squares[i].size();
-        polylines(image, &p, &n, 1, true, color, 3);
+class InteractiveDisplay {
+  public:
+    InteractiveDisplay(const std::string &name, const Mat &image,
+                       const ShapeList &squares,
+                       const optional<ShapeList &> overlapping,
+                       const optional<ShapeList &> rejected)
+        : name(name), image(image), squares(squares), overlapping(overlapping),
+          rejected(rejected) {
+        setMouseCallback(name, onMouse, this);
     }
-}
+
+    ~InteractiveDisplay() { setMouseCallback(name, nullptr, nullptr); }
+
+    static void onMouse(int event, int x, int y, int, void *s) {
+        InteractiveDisplay *self = (InteractiveDisplay *)s;
+    }
+
+    void render() {
+        buffer = image;
+        if (rejected)
+            drawShapes(buffer, *rejected, Scalar(0, 0, 255));
+        if (overlapping)
+            drawShapes(buffer, *overlapping, Scalar(255, 0, 0));
+        drawShapes(buffer, squares);
+
+        imshow(wndname, image);
+    }
+
+  private:
+    std::string name;
+
+    Mat buffer;
+
+    const Mat &image;
+    const ShapeList &squares;
+    const optional<ShapeList &> overlapping;
+    const optional<ShapeList &> rejected;
+
+    static void drawShapes(Mat &image, const ShapeList &squares,
+                           const Scalar color = Scalar(0, 255, 0)) {
+        for (size_t i = 0; i < squares.size(); i++) {
+            const Point *p = &squares[i][0];
+            int n = (int)squares[i].size();
+            polylines(image, &p, &n, 1, true, color, 3);
+        }
+    }
+};
 
 int main(int argc, char **argv) {
     //
@@ -194,14 +232,14 @@ int main(int argc, char **argv) {
 
     // Declare named options
     po::options_description desc("Allowed options");
-    bool show_rejects, show_ungrouped, recursive;
+    bool show_rejected, show_overlapping, recursive;
     std::vector<std::string> inputs;
     desc.add_options()("help", "produce help message")(
-        "show-rejects", po::bool_switch(&show_rejects),
+        "show-rejected", po::bool_switch(&show_rejected),
         "show rejected contours")(
-        "show-ungrouped", po::bool_switch(&show_ungrouped),
-        "show ungrouped contours")("recursive,r", po::bool_switch(&recursive),
-                                   "process directories recursively")(
+        "show-overlapping", po::bool_switch(&show_overlapping),
+        "show overlapping squares")("recursive,r", po::bool_switch(&recursive),
+                                    "process directories recursively")(
         "inputs,i", po::value<std::vector<std::string>>(&inputs)->required(),
         "images to process");
 
@@ -277,6 +315,7 @@ int main(int argc, char **argv) {
     //
 
     namedWindow(wndname, WINDOW_NORMAL);
+    InteractiveDisplay *display = nullptr;
 
 #if defined(_OPENMP)
     cout << "Processing with " << omp_get_max_threads() << " threads" << endl;
@@ -286,23 +325,19 @@ int main(int argc, char **argv) {
 #endif
 
     size_t i = 0;
-    int i_display = -1;
     #pragma omp parallel
     {
         while (true) {
             size_t j;
             #pragma omp atomic capture
-            {
-                j = i;
-                i++;
-            }
+            { j = i; i++; }
             if (j >= files.size())
                 break;
             auto file = files[j];
 
             // HACK: give the first thread full control during the first cycle
-            if (j < omp_get_max_threads() && j > 0)
-                while (i_display == -1)
+            if (j < (unsigned)omp_get_num_threads() && j > 0)
+                while (!display)
                     sleep(0.1);
 
             auto start = std::chrono::system_clock::now();
@@ -316,11 +351,11 @@ int main(int argc, char **argv) {
             auto contours = extractContours(image);
 
             ShapeList rejects;
-            auto squares = filterSquares(
-                contours, show_rejects ? optional<ShapeList &>(rejects)
-                                       : optional<ShapeList &>());
+            auto overlapping = filterSquares(
+                contours, show_rejected ? optional<ShapeList &>(rejects)
+                                        : optional<ShapeList &>());
 
-            auto minsquares = minimizeSquares(squares);
+            auto squares = minimizeSquares(overlapping);
 
             auto end = std::chrono::system_clock::now();
             auto elapsed =
@@ -329,26 +364,25 @@ int main(int argc, char **argv) {
 
             #pragma omp critical(display)
             {
-                i_display = j;
-
-                cout << "t" << omp_get_thread_num() << ": display" << endl;
+                display = new InteractiveDisplay(
+                    wndname, image, squares,
+                    show_overlapping ? optional<ShapeList &>(overlapping)
+                                     : optional<ShapeList &>(),
+                    show_rejected ? optional<ShapeList &>(rejects)
+                                  : optional<ShapeList &>());
+                display->render();
 
                 cout << "- " << file << " (took " << elapsed.count()
                      << " ms to process)" << endl;
                 cout.flush();
 
-                if (show_rejects)
-                    drawShapes(image, rejects, Scalar(0, 0, 255));
-                if (show_ungrouped)
-                    drawShapes(image, squares, Scalar(255, 0, 0));
-                drawShapes(image, minsquares);
-
-                imshow(wndname, image);
-
                 cout << "Press RETURN to continue" << endl;
                 int c = waitKey(0);
                 if ((char)c == 27)
                     exit(0);
+
+                delete display;
+                display = nullptr;
             }
         }
     }
