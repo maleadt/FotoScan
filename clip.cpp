@@ -10,10 +10,9 @@ using namespace std;
 // tells if Point c lies on the left side of directed edge a.b
 // 1 if left, -1 if right, 0 if colinear
 int left_of(Point a, Point b, Point c) {
-    double x;
     auto tmp1 = b - a;
     auto tmp2 = c - b;
-    x = tmp1.cross(tmp2);
+    double x = tmp1.cross(tmp2);
     return x < 0 ? -1 : x > 0;
 }
 
@@ -44,18 +43,16 @@ int line_sect(Point x0, Point x1, Point y0, Point y1, Point &res) {
 int poly_winding(vector<Point> p) { return left_of(p[0], p[1], p[3]); }
 
 vector<Point> poly_edge_clip(vector<Point> sub, Point x0, Point x1, int left) {
-    int i, side0, side1;
-    Point v0 = sub[sub.size() - 1], v1;
-
     vector<Point> res;
 
-    side0 = left_of(x0, x1, v0);
+    Point v0 = sub[sub.size() - 1], v1;
+    int side0 = left_of(x0, x1, v0);
     if (side0 != -left)
         res.push_back(v0);
 
-    for (i = 0; i < sub.size(); i++) {
+    for (size_t i = 0; i < sub.size(); i++) {
         v1 = sub[i];
-        side1 = left_of(x0, x1, v1);
+        int side1 = left_of(x0, x1, v1);
         Point tmp;
         if (side0 + side1 == 0 && side0)
             // last point and current straddle the edge
@@ -77,7 +74,7 @@ vector<Point> poly_clip(vector<Point> sub, vector<Point> clip) {
 
     int dir = poly_winding(clip);
     p2 = poly_edge_clip(sub, clip[clip.size() - 1], clip[0], dir);
-    for (int i = 0; i < clip.size() - 1; i++) {
+    for (size_t i = 0; i < clip.size() - 1; i++) {
         swap(p1, p2);
         if (p1.size() == 0) {
             p2.clear();
