@@ -286,6 +286,7 @@ int main(int argc, char **argv) {
 #endif
 
     size_t i = 0;
+    int i_display = -1;
     #pragma omp parallel
     {
         while (true) {
@@ -298,6 +299,11 @@ int main(int argc, char **argv) {
             if (j >= files.size())
                 break;
             auto file = files[j];
+
+            // HACK: give the first thread full control during the first cycle
+            if (j < omp_get_max_threads() && j > 0)
+                while (i_display == -1)
+                    sleep(0.1);
 
             auto start = std::chrono::system_clock::now();
 
@@ -323,6 +329,8 @@ int main(int argc, char **argv) {
 
             #pragma omp critical(display)
             {
+                i_display = j;
+
                 cout << "t" << omp_get_thread_num() << ": display" << endl;
 
                 cout << "- " << file << " (took " << elapsed.count()
