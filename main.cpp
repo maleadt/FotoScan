@@ -5,6 +5,10 @@
 
 #include <boost/program_options.hpp>
 #include <boost/optional.hpp>
+#define BOOST_FILESYSTEM_NO_DEPRECATED
+#define BOOST_FILESYSTEM_VERSION 3
+#include <boost/filesystem.hpp>
+
 
 #include "clip.hpp"
 
@@ -18,6 +22,7 @@ using namespace cv;
 using namespace std;
 using namespace boost;
 namespace po = boost::program_options;
+namespace fs = boost::filesystem;
 
 int thresh = 50, N = 11;
 const char *wndname = "Foto Scan";
@@ -192,22 +197,16 @@ int main(int argc, char **argv) {
 
     // Declare named options
     po::options_description desc("Allowed options");
-    bool show_rejects, show_ungrouped;
+    bool show_rejects, show_ungrouped, recursive;
     std::vector<std::string> inputs;
-    desc.add_options()
-        ("help",
-            "produce help message")
-        ("show-rejects",
-            po::bool_switch(&show_rejects),
-            "show rejected contours")
-        ("show-ungrouped",
-            po::bool_switch(&show_ungrouped),
-            "show ungrouped contours")
-        ("inputs,i",
-            po::value<std::vector<std::string>>(&inputs)
-                ->required(),
-            "images to process")
-    ;
+    desc.add_options()("help", "produce help message")(
+        "show-rejects", po::bool_switch(&show_rejects),
+        "show rejected contours")(
+        "show-ungrouped", po::bool_switch(&show_ungrouped),
+        "show ungrouped contours")("recursive,r", po::bool_switch(&recursive),
+                                   "process directories recursively")(
+        "inputs,i", po::value<std::vector<std::string>>(&inputs)->required(),
+        "images to process");
 
     // Declare positional options
     po::positional_options_description pod;
@@ -244,6 +243,39 @@ int main(int argc, char **argv) {
 
 
     //
+    // File discovery
+    //
+
+    std::vector<fs::path> files;
+    std::vector<fs::path> directories;
+    for (auto input : inputs) {
+        fs::path p(input);
+        if (!exists(p)) {
+            cerr << "Error: input '" << p << "' does not exist" << endl;
+            return 1;
+        }
+        if (is_regular_file(p))
+            files.push_back(p);
+        else if (is_directory(p))
+            directories.push_back(p);
+    }
+
+    while (!directories.empty()) {
+        auto dir = directories.back();
+        directories.pop_back();
+
+        fs::recursive_directory_iterator end;
+        for (fs::recursive_directory_iterator i(dir); i != end; ++i) {
+            const fs::path p = (*i);
+            if (is_regular_file(p))
+                files.push_back(p);
+            else if (is_directory(p) && recursive)
+                directories.push_back(p);
+        }
+    }
+
+
+    //
     // Main processing
     //
 
@@ -253,14 +285,14 @@ int main(int argc, char **argv) {
     cout << "Processing with " << omp_get_num_threads() << " threads" << endl;
 #endif
 
-    for (auto input: inputs) {
-        cout << "- " << input << "...";
+    for (auto file : files) {
+        cout << "- " << file << "... ";
         cout.flush();
         auto start = std::chrono::system_clock::now();
 
-        Mat image = imread(input, 1);
+        Mat image = imread(file.string(), 1);
         if (image.empty()) {
-            cout << "Couldn't load " << input << endl;
+            cout << "Couldn't load " << file << endl;
             continue;
         }
 
@@ -276,7 +308,7 @@ int main(int argc, char **argv) {
         auto end = std::chrono::system_clock::now();
         auto elapsed =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << " took " << elapsed.count() << " ms" << endl;
+        std::cout << "took " << elapsed.count() << " ms" << endl;
 
         if (show_rejects)
             drawShapes(image, rejects, Scalar(0, 0, 255));
