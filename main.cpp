@@ -186,6 +186,10 @@ static void drawShapes(Mat &image, const ShapeList &squares,
 }
 
 int main(int argc, char **argv) {
+    //
+    // Options
+    //
+
     // Declare the supported options.
     po::options_description desc("Allowed options");
     bool show_rejects, show_ungrouped;
@@ -196,16 +200,34 @@ int main(int argc, char **argv) {
     ;
 
     po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);
+    try {
+        po::store(po::parse_command_line(argc, argv, desc), vm);
 
-    if (vm.count("help")) {
-        cout << desc << "\n";
+        if (vm.count("help")) {
+            cout << desc << "\n";
+            return 0;
+        }
+
+        po::notify(vm);
+    } catch (po::error &e) {
+        cerr << "ERROR: " << e.what() << endl << endl;
+        cerr << desc << endl;
         return 1;
     }
 
+
+    //
+    // File discovery
+    //
+
     static const char *names[] = {
         "/home/tim/Bureaublad/Foto's/boek1/front/DSC_1986.JPG", 0};
+
+
+    //
+    // Main processing
+    //
+
     namedWindow(wndname, WINDOW_NORMAL);
 
 #if defined(_OPENMP)
