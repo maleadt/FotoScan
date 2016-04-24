@@ -9,7 +9,6 @@
 #define BOOST_FILESYSTEM_VERSION 3
 #include <boost/filesystem.hpp>
 
-
 #include "clip.hpp"
 
 #include <iostream>
@@ -79,7 +78,7 @@ static ShapeList extractContours(const Mat &image) {
             ShapeList contours;
             findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
 
-            #pragma omp critical
+            #pragma omp critical(all_contours)
             all_contours.insert(all_contours.end(), contours.begin(),
                                 contours.end());
         }
@@ -131,13 +130,13 @@ filterSquares(const ShapeList &contours,
             if (maxCosine > 0.10)
                 goto reject;
 
-            #pragma omp critical
+            #pragma omp critical(accepts)
             accepts.push_back(approx);
             continue;
 
         reject:
             if (rejects) {
-            #pragma omp critical
+                #pragma omp critical(rejects)
                 (*rejects).push_back(approx);
             }
         }
@@ -186,8 +185,6 @@ static void drawShapes(Mat &image, const ShapeList &squares,
         int n = (int)squares[i].size();
         polylines(image, &p, &n, 1, true, color, 3);
     }
-
-    imshow(wndname, image);
 }
 
 int main(int argc, char **argv) {
@@ -282,44 +279,70 @@ int main(int argc, char **argv) {
     namedWindow(wndname, WINDOW_NORMAL);
 
 #if defined(_OPENMP)
-    cout << "Processing with " << omp_get_num_threads() << " threads" << endl;
+    cout << "Processing with " << omp_get_max_threads() << " threads" << endl;
+    // NOTE: we need nesting or each file would be processed on a single thread
+    //       (disregarding the deeper parallelism)
+    omp_set_nested(true);
 #endif
 
-    for (auto file : files) {
-        cout << "- " << file << "... ";
-        cout.flush();
-        auto start = std::chrono::system_clock::now();
+    size_t i = 0;
+    #pragma omp parallel
+    {
+        while (true) {
+            size_t j;
+            #pragma omp atomic capture
+            {
+                j = i;
+                i++;
+            }
+            if (j >= files.size())
+                break;
+            auto file = files[j];
 
-        Mat image = imread(file.string(), 1);
-        if (image.empty()) {
-            cout << "Couldn't load " << file << endl;
-            continue;
+            auto start = std::chrono::system_clock::now();
+
+            Mat image = imread(file.string(), 1);
+            if (image.empty()) {
+                cout << "Couldn't load " << file << endl;
+                continue;
+            }
+
+            auto contours = extractContours(image);
+
+            ShapeList rejects;
+            auto squares = filterSquares(
+                contours, show_rejects ? optional<ShapeList &>(rejects)
+                                       : optional<ShapeList &>());
+
+            auto minsquares = minimizeSquares(squares);
+
+            auto end = std::chrono::system_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(end -
+                                                                      start);
+
+            #pragma omp critical(display)
+            {
+                cout << "t" << omp_get_thread_num() << ": display" << endl;
+
+                cout << "- " << file << " (took " << elapsed.count()
+                     << " ms to process)" << endl;
+                cout.flush();
+
+                if (show_rejects)
+                    drawShapes(image, rejects, Scalar(0, 0, 255));
+                if (show_ungrouped)
+                    drawShapes(image, squares, Scalar(255, 0, 0));
+                drawShapes(image, minsquares);
+
+                imshow(wndname, image);
+
+                cout << "Press RETURN to continue" << endl;
+                int c = waitKey(0);
+                if ((char)c == 27)
+                    exit(0);
+            }
         }
-
-        auto contours = extractContours(image);
-
-        ShapeList rejects;
-        auto squares = filterSquares(
-            contours, show_rejects ? optional<ShapeList &>(rejects)
-                                   : optional<ShapeList &>());
-
-        auto minsquares = minimizeSquares(squares);
-
-        auto end = std::chrono::system_clock::now();
-        auto elapsed =
-            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        std::cout << "took " << elapsed.count() << " ms" << endl;
-
-        if (show_rejects)
-            drawShapes(image, rejects, Scalar(0, 0, 255));
-        if (show_ungrouped)
-            drawShapes(image, squares, Scalar(255, 0, 0));
-        drawShapes(image, minsquares);
-
-        cout << "Press RETURN to continue" << endl;
-        int c = waitKey(0);
-        if ((char)c == 27)
-            break;
     }
 
     return 0;
