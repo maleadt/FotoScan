@@ -9,6 +9,8 @@
 #include <cmath>
 #include <chrono>
 
+#include <omp.h>
+
 using namespace cv;
 using namespace std;
 
@@ -43,21 +45,25 @@ bool cmp_pictures(const Shape &a, const Shape &b) {
 }
 
 // returns sequence of contours detected in the image.
-static ShapeList findContours(const Mat &image) {
-    Mat pyr, timg, gray0(image.size(), CV_8U), gray;
-
+static ShapeList extractContours(const Mat &image) {
     // down-scale and upscale the image to filter out the noise
+    Mat pyr, timg;
     pyrDown(image, pyr, Size(image.cols / 2, image.rows / 2));
     pyrUp(pyr, timg, image.size());
 
     // find squares in every color plane of the image
     ShapeList all_contours;
+    #pragma omp parallel for
     for (int c = 0; c < 3; c++) {
+        Mat gray0(image.size(), CV_8U);
+
         int ch[] = {c, 0};
         mixChannels(&timg, 1, &gray0, 1, ch, 1);
 
         // try several threshold levels
+        #pragma omp parallel for
         for (int l = 0; l < N; l++) {
+            Mat gray;
             // hack: use Canny instead of zero threshold level.
             // Canny helps to catch squares with gradient shading
             if (l == 0) {
@@ -77,6 +83,7 @@ static ShapeList findContours(const Mat &image) {
             ShapeList contours;
             findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
 
+            #pragma omp critical
             all_contours.insert(all_contours.end(), contours.begin(),
                                 contours.end());
         }
@@ -90,6 +97,7 @@ static ShapeList filterSquares(const ShapeList &contours) {
     ShapeList squares;
 
     // test each contour
+    #pragma omp parallel for
     for (size_t i = 0; i < contours.size(); i++) {
         // approximate contour with accuracy proportional
         // to the contour perimeter
@@ -123,6 +131,7 @@ static ShapeList filterSquares(const ShapeList &contours) {
             if (maxCosine > 0.05)
                 continue;
 
+            #pragma omp critical
             squares.push_back(approx);
         }
     }
@@ -138,7 +147,7 @@ static ShapeList minimizeSquares(const ShapeList &squares) {
 
     // reduce to groups, selecting the _smallest_ image
     // TODO: save alternatives, allow selection through GUI
-    for (int i = 0; i < squares.size(); i++) {
+    for (size_t i = 0; i < squares.size(); i++) {
         int group = labels[i];
         if (grouped_squares[group].size() == 0)
             grouped_squares[group] = squares[i];
@@ -165,8 +174,12 @@ int main(int argc, char **argv) {
     static const char *names[] = {"../fotos/boek1/front/DSC_1986.JPG", 0};
     namedWindow(wndname, WINDOW_NORMAL);
 
+#if defined(_OPENMP)
+    cout << "Processing with " << omp_get_num_threads() << " threads" << endl;
+#endif
+
     for (int i = 0; names[i] != 0; i++) {
-        cout << "Processing " << names[i] << "...";
+        cout << "- " << names[i] << "...";
         cout.flush();
         auto start = std::chrono::system_clock::now();
 
@@ -176,7 +189,7 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        auto contours = findContours(image);
+        auto contours = extractContours(image);
         auto squares = filterSquares(contours);
         auto minsquares = minimizeSquares(squares);
 
