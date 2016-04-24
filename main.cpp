@@ -6,8 +6,8 @@
 #include "clip.hpp"
 
 #include <iostream>
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <chrono>
 
 using namespace cv;
 using namespace std;
@@ -166,6 +166,10 @@ int main(int argc, char **argv) {
     namedWindow(wndname, WINDOW_NORMAL);
 
     for (int i = 0; names[i] != 0; i++) {
+        cout << "Processing " << names[i] << "...";
+        cout.flush();
+        auto start = std::chrono::system_clock::now();
+
         Mat image = imread(names[i], 1);
         if (image.empty()) {
             cout << "Couldn't load " << names[i] << endl;
@@ -175,6 +179,11 @@ int main(int argc, char **argv) {
         auto contours = findContours(image);
         auto squares = filterSquares(contours);
         auto minsquares = minimizeSquares(squares);
+
+        auto end = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << " done after " << elapsed.count() << " ms!" << endl;
+
         drawSquares(image, minsquares);
 
         cout << "Press RETURN to continue" << endl;
