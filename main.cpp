@@ -39,18 +39,16 @@ bool cmp_pictures(const vector<Point> &a, const vector<Point> &b) {
     return a_clip/MAX(a_a, a_b) > 0.95;
 }
 
-// returns sequence of squares detected on the image.
-// the sequence is stored in the specified memory storage
-static vector<vector<Point>> findSquares(const Mat &image) {
+// returns sequence of contours detected in the image.
+static vector<vector<Point>> findContours(const Mat &image) {
     Mat pyr, timg, gray0(image.size(), CV_8U), gray;
 
     // down-scale and upscale the image to filter out the noise
     pyrDown(image, pyr, Size(image.cols / 2, image.rows / 2));
     pyrUp(pyr, timg, image.size());
-    vector<vector<Point>> contours;
 
     // find squares in every color plane of the image
-    vector<vector<Point>> squares;
+    vector<vector<Point>> all_contours;
     for (int c = 0; c < 3; c++) {
         int ch[] = {c, 0};
         mixChannels(&timg, 1, &gray0, 1, ch, 1);
@@ -73,50 +71,63 @@ static vector<vector<Point>> findSquares(const Mat &image) {
             }
 
             // find contours and store them all as a list
+            vector<vector<Point>> contours;
             findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
 
-            vector<Point> approx;
-
-            // test each contour
-            for (size_t i = 0; i < contours.size(); i++) {
-                // approximate contour with accuracy proportional
-                // to the contour perimeter
-                approxPolyDP(Mat(contours[i]), approx,
-                             arcLength(Mat(contours[i]), true) * 0.02, true);
-
-                // square contours should have 4 vertices after approximation
-                // and be convex.
-                if (approx.size() == 4 &&
-                    isContourConvex(Mat(approx))) {
-                    double maxCosine = 0;
-
-                    // Filter on area
-                    // Note: absolute value of an area is used because
-                    // area may be positive or negative - in accordance with the
-                    // contour orientation
-                    auto area = fabs(contourArea(Mat(approx)));
-                    if (area < 500000 || area > 10000000)
-                        continue;
-
-                    for (int j = 2; j < 5; j++) {
-                        // find the maximum cosine of the angle between joint
-                        // edges
-                        double cosine = fabs(
-                            angle(approx[j % 4], approx[j - 2], approx[j - 1]));
-                        maxCosine = MAX(maxCosine, cosine);
-                    }
-
-                    // if cosines of all angles are small (angles should be ~90
-                    // degrees)
-                    if (maxCosine > 0.05)
-                        continue;
-
-                    squares.push_back(approx);
-                }
-            }
+            all_contours.insert(all_contours.end(), contours.begin(), contours.end());
         }
     }
 
+    return all_contours;
+}
+
+// filter the squares from a list of contours
+static vector<vector<Point>> filterSquares(const vector<vector<Point>> &contours) {
+    vector<vector<Point>> squares;
+
+    // test each contour
+    for (size_t i = 0; i < contours.size(); i++) {
+        // approximate contour with accuracy proportional
+        // to the contour perimeter
+        vector<Point> approx;
+        approxPolyDP(Mat(contours[i]), approx,
+                     arcLength(Mat(contours[i]), true) * 0.02, true);
+
+        // square contours should have 4 vertices after approximation
+        // and be convex.
+        if (approx.size() == 4 &&
+            isContourConvex(Mat(approx))) {
+            double maxCosine = 0;
+
+            // Filter on area
+            // Note: absolute value of an area is used because
+            // area may be positive or negative - in accordance with the
+            // contour orientation
+            auto area = fabs(contourArea(Mat(approx)));
+            if (area < 500000 || area > 10000000)
+                continue;
+
+            for (int j = 2; j < 5; j++) {
+                // find the maximum cosine of the angle between joint
+                // edges
+                double cosine = fabs(
+                    angle(approx[j % 4], approx[j - 2], approx[j - 1]));
+                maxCosine = MAX(maxCosine, cosine);
+            }
+
+            // if cosines of all angles are small (angles should be ~90
+            // degrees)
+            if (maxCosine > 0.05)
+                continue;
+
+            squares.push_back(approx);
+        }
+    }
+
+    return squares;
+}
+
+static vector<vector<Point>> minimizeSquares(const vector<vector<Point>> &squares) {
     // partition squares based on the area of their intersection
     vector<int> labels;
     int groups = partition(squares, labels, cmp_pictures);
@@ -148,7 +159,7 @@ static void drawSquares(Mat &image, const vector<vector<Point>> &squares) {
 }
 
 int main(int argc, char **argv) {
-    static const char *names[] = {"../boek1/front/DSC_1896.JPG", 0};
+    static const char *names[] = {"../fotos/boek1/front/DSC_1986.JPG", 0};
     namedWindow(wndname, WINDOW_NORMAL);
 
     for (int i = 0; names[i] != 0; i++) {
@@ -158,8 +169,10 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        auto squares = findSquares(image);
-        drawSquares(image, squares);
+        auto contours = findContours(image);
+        auto squares = filterSquares(contours);
+        auto minsquares = minimizeSquares(squares);
+        drawSquares(image, minsquares);
 
         cout << "Press RETURN to continue" << endl;
         int c = waitKey(0);
