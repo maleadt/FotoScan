@@ -15,6 +15,9 @@ using namespace std;
 int thresh = 50, N = 11;
 const char *wndname = "Picture Detection";
 
+typedef vector<Point> Shape;
+typedef vector<Shape> ShapeList;
+
 // helper function:
 // finds a cosine of angle between vectors
 // from pt0->pt1 and from pt0->pt2
@@ -27,7 +30,7 @@ static double angle(Point pt1, Point pt2, Point pt0) {
            sqrt((dx1 * dx1 + dy1 * dy1) * (dx2 * dx2 + dy2 * dy2) + 1e-10);
 }
 
-bool cmp_pictures(const vector<Point> &a, const vector<Point> &b) {
+bool cmp_pictures(const Shape &a, const Shape &b) {
     auto clip = poly_clip(a, b);
     if (clip.size() == 0)
         return false;
@@ -40,7 +43,7 @@ bool cmp_pictures(const vector<Point> &a, const vector<Point> &b) {
 }
 
 // returns sequence of contours detected in the image.
-static vector<vector<Point>> findContours(const Mat &image) {
+static ShapeList findContours(const Mat &image) {
     Mat pyr, timg, gray0(image.size(), CV_8U), gray;
 
     // down-scale and upscale the image to filter out the noise
@@ -48,7 +51,7 @@ static vector<vector<Point>> findContours(const Mat &image) {
     pyrUp(pyr, timg, image.size());
 
     // find squares in every color plane of the image
-    vector<vector<Point>> all_contours;
+    ShapeList all_contours;
     for (int c = 0; c < 3; c++) {
         int ch[] = {c, 0};
         mixChannels(&timg, 1, &gray0, 1, ch, 1);
@@ -71,7 +74,7 @@ static vector<vector<Point>> findContours(const Mat &image) {
             }
 
             // find contours and store them all as a list
-            vector<vector<Point>> contours;
+            ShapeList contours;
             findContours(gray, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
 
             all_contours.insert(all_contours.end(), contours.begin(), contours.end());
@@ -82,14 +85,14 @@ static vector<vector<Point>> findContours(const Mat &image) {
 }
 
 // filter the squares from a list of contours
-static vector<vector<Point>> filterSquares(const vector<vector<Point>> &contours) {
-    vector<vector<Point>> squares;
+static ShapeList filterSquares(const ShapeList &contours) {
+    ShapeList squares;
 
     // test each contour
     for (size_t i = 0; i < contours.size(); i++) {
         // approximate contour with accuracy proportional
         // to the contour perimeter
-        vector<Point> approx;
+        Shape approx;
         approxPolyDP(Mat(contours[i]), approx,
                      arcLength(Mat(contours[i]), true) * 0.02, true);
 
@@ -127,11 +130,11 @@ static vector<vector<Point>> filterSquares(const vector<vector<Point>> &contours
     return squares;
 }
 
-static vector<vector<Point>> minimizeSquares(const vector<vector<Point>> &squares) {
+static ShapeList minimizeSquares(const ShapeList &squares) {
     // partition squares based on the area of their intersection
     vector<int> labels;
     int groups = partition(squares, labels, cmp_pictures);
-    vector<vector<Point>> grouped_squares(groups);
+    ShapeList grouped_squares(groups);
 
     // reduce to groups, selecting the _smallest_ image
     // TODO: save alternatives, allow selection through GUI
@@ -148,7 +151,7 @@ static vector<vector<Point>> minimizeSquares(const vector<vector<Point>> &square
 }
 
 // the function draws all the squares in the image
-static void drawSquares(Mat &image, const vector<vector<Point>> &squares) {
+static void drawSquares(Mat &image, const ShapeList &squares) {
     for (size_t i = 0; i < squares.size(); i++) {
         const Point *p = &squares[i][0];
         int n = (int)squares[i].size();
