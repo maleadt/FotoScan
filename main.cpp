@@ -190,38 +190,57 @@ int main(int argc, char **argv) {
     // Options
     //
 
-    // Declare the supported options.
+    // Declare named options
     po::options_description desc("Allowed options");
     bool show_rejects, show_ungrouped;
+    std::vector<std::string> inputs;
     desc.add_options()
-        ("help", "produce help message")
-        ("show-rejects", po::bool_switch(&show_rejects), "show rejected contours")
-        ("show-ungrouped", po::bool_switch(&show_ungrouped), "show ungrouped contours")
+        ("help",
+            "produce help message")
+        ("show-rejects",
+            po::bool_switch(&show_rejects),
+            "show rejected contours")
+        ("show-ungrouped",
+            po::bool_switch(&show_ungrouped),
+            "show ungrouped contours")
+        ("inputs,i",
+            po::value<std::vector<std::string>>(&inputs)
+                ->required(),
+            "images to process")
     ;
 
+    // Declare positional options
+    po::positional_options_description pod;
+    pod.add("inputs", -1);
+
+    // Parse
     po::variables_map vm;
     try {
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-
-        if (vm.count("help")) {
-            cout << desc << "\n";
-            return 0;
-        }
-
-        po::notify(vm);
+        po::store(po::command_line_parser(argc, argv)
+                      .options(desc)
+                      .positional(pod)
+                      .run(),
+                  vm);
     } catch (po::error &e) {
-        cerr << "ERROR: " << e.what() << endl << endl;
+        cerr << "Error: " << e.what() << endl << endl;
         cerr << desc << endl;
         return 1;
     }
 
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 0;
+    }
 
-    //
-    // File discovery
-    //
+    // Notify the user of errors
+    try {
+        notify(vm);
+    } catch (const std::exception &e) {
+        cerr << "Invalid usage: " << e.what() << endl;
 
-    static const char *names[] = {
-        "/home/tim/Bureaublad/Foto's/boek1/front/DSC_1986.JPG", 0};
+        cout << desc << endl;
+        return 1;
+    }
 
 
     //
@@ -234,14 +253,14 @@ int main(int argc, char **argv) {
     cout << "Processing with " << omp_get_num_threads() << " threads" << endl;
 #endif
 
-    for (int i = 0; names[i] != 0; i++) {
-        cout << "- " << names[i] << "...";
+    for (auto input: inputs) {
+        cout << "- " << input << "...";
         cout.flush();
         auto start = std::chrono::system_clock::now();
 
-        Mat image = imread(names[i], 1);
+        Mat image = imread(input, 1);
         if (image.empty()) {
-            cout << "Couldn't load " << names[i] << endl;
+            cout << "Couldn't load " << input << endl;
             continue;
         }
 
