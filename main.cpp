@@ -186,23 +186,84 @@ class InteractiveDisplay {
         : name(name), image(image), squares(squares), overlapping(overlapping),
           rejected(rejected) {
         setMouseCallback(name, onMouse, this);
+
+        scale = 1;
+        cv::Size s = image.size();
+        x[0] = 0;
+        y[0] = 0;
+        x[1] = s.width;
+        y[1] = s.height;
     }
 
     ~InteractiveDisplay() { setMouseCallback(name, nullptr, nullptr); }
 
     static void onMouse(int event, int x, int y, int, void *s) {
         InteractiveDisplay *self = (InteractiveDisplay *)s;
+
+        switch (event) {
+        case EVENT_LBUTTONDBLCLK: {
+            self->zoom(x, y, 4);
+            self->render();
+            break;
+        }
+        case EVENT_RBUTTONDBLCLK: {
+            self->zoom(x, y, 0.25);
+            self->render();
+            break;
+        }
+        default:
+            break;
+        }
     }
 
     void render() {
-        buffer = image;
+        cout << "Rendering from (" << x[0] << "," << y[0] << ") to (" << x[1]
+             << "," << y[1] << ") from img[" << image.size().width << ","
+             << image.size().height << "]" << endl;
+        buffer = cv::Mat(image, cv::Rect(x[0], y[0], x[1] - x[0] - 1, y[1] - y[0] - 1));
         if (rejected)
-            drawShapes(buffer, *rejected, Scalar(0, 0, 255));
+            drawShapes(*rejected, Scalar(0, 0, 255));
         if (overlapping)
-            drawShapes(buffer, *overlapping, Scalar(255, 0, 0));
-        drawShapes(buffer, squares);
+            drawShapes(*overlapping, Scalar(255, 0, 0));
+        drawShapes(squares);
 
-        imshow(wndname, image);
+        imshow(name, buffer);
+    }
+
+    void zoom(int x_focus, int y_focus, float factor) {
+        scale *= factor;
+        if (scale < 1.0)
+            scale = 1.0;
+
+        cv::Size s = image.size();
+        int x_range = s.width / scale;
+        int y_range = s.height / scale;
+
+        x[0] = x_focus - x_focus / scale;
+        x[1] = x[0] + x_range;
+        if (x[0] < 0) {
+            x[1] += abs(x[0]);
+            x[0] = 0;
+        }
+        if (x[1] > s.width) {
+            x[0] -= (x[1] - s.width);
+            x[1] = s.width;
+        }
+        assert(x[0] >= 0);
+        assert(x[1] <= s.width);
+
+        y[0] = y_focus - y_focus / scale;
+        y[1] = y[0] + y_range;
+        if (y[0] < 0) {
+            y[1] += abs(y[0]);
+            y[0] = 0;
+        }
+        if (y[1] > s.height) {
+            y[0] -= (y[1] - s.height);
+            y[1] = s.height;
+        }
+        assert(y[0] >= 0);
+        assert(y[1] <= s.height);
     }
 
   private:
@@ -210,17 +271,21 @@ class InteractiveDisplay {
 
     Mat buffer;
 
+    float scale;
+    int x[2];
+    int y[2];
+
     const Mat &image;
     const ShapeList &squares;
     const optional<ShapeList &> overlapping;
     const optional<ShapeList &> rejected;
 
-    static void drawShapes(Mat &image, const ShapeList &squares,
+    void drawShapes(const ShapeList &squares,
                            const Scalar color = Scalar(0, 255, 0)) {
         for (size_t i = 0; i < squares.size(); i++) {
             const Point *p = &squares[i][0];
             int n = (int)squares[i].size();
-            polylines(image, &p, &n, 1, true, color, 3);
+            polylines(buffer, &p, &n, 1, true, color, 3);
         }
     }
 };
@@ -335,10 +400,12 @@ int main(int argc, char **argv) {
                 break;
             auto file = files[j];
 
+#if defined(_OPENMP)
             // HACK: give the first thread full control during the first cycle
             if (j < (unsigned)omp_get_num_threads() && j > 0)
                 while (!display)
                     sleep(0.1);
+#endif
 
             auto start = std::chrono::system_clock::now();
 

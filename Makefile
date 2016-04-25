@@ -1,7 +1,7 @@
 .PHONY: default
 default: release
 
-LDLIBS   += -lopencv_core -lopencv_highgui -lopencv_imgproc -lopencv_objdetect
+LDLIBS   += $(shell pkg-config --libs opencv )
 LDLIBS   += -lboost_program_options -lboost_system -lboost_filesystem
 
 CPPFLAGS += -Wall
@@ -10,7 +10,7 @@ CXXFLAGS += -std=c++11
 main: clip.o
 
 .PHONY: debug release
-debug: CXXFLAGS += -DDEBUG -g -fno-omit-frame-pointer -O2
+debug: CXXFLAGS += -DDEBUG -g -fno-omit-frame-pointer
 debug: main
 release: CXXFLAGS += -DNDEBUG -O3 -fopenmp
 release: main
