@@ -1,6 +1,10 @@
 #pragma once
 
 #include <QGraphicsView>
+#include <QPoint>
+#include <QMap>
+
+class QGraphicsPolygonItem;
 
 class GraphicsView : public QGraphicsView {
     Q_OBJECT
@@ -17,4 +21,8 @@ class GraphicsView : public QGraphicsView {
     void mousePressEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void mouseReleaseEvent(QMouseEvent *event);
+
+  private:
+    QMap<Qt::MouseButton, QPoint> mousePosition;
+    QGraphicsPolygonItem *selected = nullptr;
 };
