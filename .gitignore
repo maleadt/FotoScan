@@ -4,3 +4,6 @@ core.*
 vgcore.*
 perf.data*
 *.sublime-*
+moc_*.cpp
+Makefile
+*.pro.user
