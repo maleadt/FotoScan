@@ -3,24 +3,30 @@
 #include <QApplication>
 #include <QWheelEvent>
 
+static const double scaleFactor = 1.15;
+static double currentScale = 1.0; // stores the current scale value.
+
 GraphicsView::GraphicsView(QWidget *parent) : QGraphicsView(parent) {}
 
 GraphicsView::GraphicsView(QGraphicsScene *scene, QWidget *parent)
     : QGraphicsView(scene, parent) {}
 
+void GraphicsView::zoomIn() {
+    scale(scaleFactor, scaleFactor);
+    currentScale *= scaleFactor;
+}
+
+void GraphicsView::zoomOut() {
+    scale(1 / scaleFactor, 1 / scaleFactor);
+    currentScale /= scaleFactor;
+}
 
 void GraphicsView::wheelEvent(QWheelEvent *event) {
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
-    static const double scaleFactor = 1.15;
-    static double currentScale = 1.0; // stores the current scale value.
-
-    if (event->delta() > 0) {
-        scale(scaleFactor, scaleFactor);
-        currentScale *= scaleFactor;
-    } else {
-        scale(1 / scaleFactor, 1 / scaleFactor);
-        currentScale /= scaleFactor;
-    }
+    if (event->delta() > 0)
+        zoomIn();
+    else
+        zoomOut();
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent *event) {

@@ -9,6 +9,9 @@ class GraphicsView : public QGraphicsView {
     GraphicsView(QGraphicsScene *scene, QWidget *parent = 0);
     virtual ~GraphicsView(){};
 
+    void zoomIn();
+    void zoomOut();
+
   protected:
     virtual void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *event);

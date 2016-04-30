@@ -15,10 +15,10 @@ Viewer::Viewer() : scene(new QGraphicsScene), view(new GraphicsView(scene)) {
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
 
-    zoomInAct = viewMenu->addAction(tr("Zoom &In"), this, &Viewer::zoomIn);
+    zoomInAct = viewMenu->addAction(tr("Zoom &In"), view, &GraphicsView::zoomIn);
     zoomInAct->setShortcut(QKeySequence::ZoomIn);
 
-    zoomOutAct = viewMenu->addAction(tr("Zoom &Out"), this, &Viewer::zoomOut);
+    zoomOutAct = viewMenu->addAction(tr("Zoom &Out"), view, &GraphicsView::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
 
     zoomRestoreAct =
@@ -94,14 +94,6 @@ void Viewer::keyPressEvent(QKeyEvent *event) {
             emit finished(data);
         }
     }
-}
-
-void Viewer::zoomIn() {
-    // TODO
-}
-
-void Viewer::zoomOut() {
-    // TODO
 }
 
 void Viewer::zoomRestore() {

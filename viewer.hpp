@@ -24,8 +24,6 @@ class Viewer : public QMainWindow {
     virtual void keyPressEvent(QKeyEvent *event);
 
   private slots:
-    void zoomIn();
-    void zoomOut();
     void zoomRestore();
     void showRejects();
     void showUngrouped();
