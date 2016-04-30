@@ -174,10 +174,10 @@ ShapeList minimizeSquares(const ShapeList &squares) {
 }
 
 static QPolygon toPolygon(Shape shape) {
-    QVector<QPoint> polygon_points;
+    QPolygon polygon;
     for (auto point : shape)
-        polygon_points << QPoint(point.x, point.y);
-    return QPolygon(polygon_points);
+        polygon << QPoint(point.x, point.y);
+    return polygon;
 }
 
 static QList<QPolygon> toPolygonList(ShapeList shapes) {

@@ -84,6 +84,7 @@ void Viewer::clear() {
     pictureItems.clear();
 
     scene->clear(); // This deletes the actual items
+    view->clear();
 }
 
 DetectionData *Viewer::current() { return data; }

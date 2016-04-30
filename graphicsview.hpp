@@ -2,7 +2,6 @@
 
 #include <QGraphicsView>
 #include <QPoint>
-#include <QMap>
 
 class QGraphicsPolygonItem;
 
@@ -16,6 +15,8 @@ class GraphicsView : public QGraphicsView {
     void zoomIn();
     void zoomOut();
 
+    void clear();
+
   protected:
     virtual void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *event);
@@ -23,6 +24,7 @@ class GraphicsView : public QGraphicsView {
     void mouseReleaseEvent(QMouseEvent *event);
 
   private:
-    QMap<Qt::MouseButton, QPoint> mousePosition;
+    QPoint mousePosition, dragPosition;
     QGraphicsPolygonItem *selected = nullptr;
+    int dragCorner;
 };
