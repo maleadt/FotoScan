@@ -30,13 +30,9 @@ void GraphicsView::wheelEvent(QWheelEvent *event) {
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::RightButton) {
+    if (event->button() == Qt::LeftButton) {
         setDragMode(QGraphicsView::ScrollHandDrag);
-
-        // simulate a left click
-        QMouseEvent mouseEvent(event->type(), event->pos(), Qt::LeftButton,
-                               Qt::LeftButton, event->modifiers());
-        QGraphicsView::mousePressEvent(&mouseEvent);
+        QGraphicsView::mousePressEvent(event);
     } else
         QGraphicsView::mousePressEvent(event);
 }
@@ -51,7 +47,7 @@ void GraphicsView::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent *event) {
-    if (event->button() == Qt::RightButton) {
+    if (event->button() == Qt::LeftButton) {
         QGraphicsView::mouseReleaseEvent(event);
         setCursor(Qt::ArrowCursor);
         setDragMode(QGraphicsView::NoDrag);
