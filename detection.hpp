@@ -22,13 +22,12 @@ class DetectionTask : public QObject, public QRunnable {
 
   public:
     DetectionTask(QString file);
-    ~DetectionTask();
     void run();
 
   signals:
-    void finished(DetectionData *);
+    void success(DetectionData *);
+    void failure(DetectionData *, std::exception *);
 
   private:
     DetectionData *data;
-    bool success;
 };

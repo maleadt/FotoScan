@@ -21,5 +21,9 @@ int main(int argc, char *argv[]) {
         app.scan(arg);
 
     QTimer::singleShot(0, &app, SLOT(onEventLoopStarted()));
-    return app.exec();
+    try {
+        return app.exec();
+    } catch (std::exception e) {
+        qFatal(e.what());
+    }
 }

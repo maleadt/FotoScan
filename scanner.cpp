@@ -30,15 +30,18 @@ int Scanner::scan(QString path) {
             files += scan(it.next());
         return files;
     } else
-        throw QString("Unable to handle %1").arg(path);
+        throw std::runtime_error(
+            QString("Unable to handle %1").arg(path).toStdString());
 }
 
 void Scanner::enqueueDetection() {
     queueLock.lock();
-    if (toReview.size() < BUFFER) {
+    if (toDetect.size() > 0 && toReview.size() < BUFFER) {
         auto T = new DetectionTask(toDetect.takeFirst());
-        connect(T, SIGNAL(finished(DetectionData *)), this,
-                SLOT(onDetectionFinished(DetectionData *)));
+        connect(T, SIGNAL(success(DetectionData *)), this,
+                SLOT(onDetectionSuccess(DetectionData *)));
+        connect(T, SIGNAL(failure(DetectionData *, std::exception *)), this,
+                SLOT(onDetectionFailure(DetectionData *, std::exception *)));
         QThreadPool::globalInstance()->start(T);
     }
     queueLock.unlock();
@@ -58,12 +61,22 @@ void Scanner::onEventLoopStarted() {
     enqueueDetection();
 }
 
-void Scanner::onDetectionFinished(DetectionData *data) {
+void Scanner::onDetectionSuccess(DetectionData *data) {
     queueLock.lock();
     toReview << data;
     queueLock.unlock();
 
     enqueueReview();
+    enqueueDetection();
+}
+
+void Scanner::onDetectionFailure(DetectionData *data, std::exception *ex) {
+    qCritical() << QString("Detection for %1 failed: %2")
+                       .arg(data->file)
+                       .arg(ex->what());
+    delete data;
+    delete ex;
+
     enqueueDetection();
 }
 

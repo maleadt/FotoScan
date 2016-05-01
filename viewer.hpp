@@ -9,7 +9,7 @@ class QGraphicsScene;
 class QGraphicsView;
 class QGraphicsItem;
 class QAction;
-class DetectionData;
+struct DetectionData;
 
 class Viewer : public QMainWindow {
     Q_OBJECT

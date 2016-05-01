@@ -208,14 +208,6 @@ static QList<QRect> toRectList(ShapeList shapes) {
 DetectionTask::DetectionTask(QString file) {
     data = new DetectionData();
     data->file = file;
-
-    success = false;
-}
-
-DetectionTask::~DetectionTask() {
-    // TODO: can we use std::move here
-    if (!success)
-        delete data;
 }
 
 void DetectionTask::run() {
@@ -224,9 +216,13 @@ void DetectionTask::run() {
     QImageReader reader(data->file);
     reader.setAutoTransform(true);
     data->image = reader.read();
-    if (data->image.isNull())
-        throw QString("Cannot load %1: %2")
-            .arg(data->file, reader.errorString());
+    if (data->image.isNull()) {
+        emit failure(data, new std::runtime_error(
+                               QString("Cannot load %1: %2")
+                                   .arg(data->file, reader.errorString())
+                                   .toStdString()));
+        return;
+    }
 
     ShapeList cv_contours, cv_rejects, cv_ungrouped, cv_pictures;
 
@@ -252,6 +248,5 @@ void DetectionTask::run() {
     data->ungrouped = toPolygonList(cv_ungrouped);
     data->pictures = toPolygonList(cv_pictures);
 
-    success = true;
-    emit finished(data);
+    emit success(data);
 }
