@@ -16,7 +16,7 @@ class Viewer : public QMainWindow {
 
   public:
     Viewer();
-    bool display(DetectionData *);
+    void display(DetectionData *);
     void clear();
     DetectionData *current();
 
@@ -29,7 +29,8 @@ class Viewer : public QMainWindow {
     void showUngrouped();
 
   signals:
-    void finished(DetectionData *);
+    void success(DetectionData *);
+    void failure(DetectionData *, std::exception *);
 
   private:
     void updateActions();

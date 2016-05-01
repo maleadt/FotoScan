@@ -40,8 +40,14 @@ Viewer::Viewer() : scene(new QGraphicsScene), view(new GraphicsView(scene)) {
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 }
 
-bool Viewer::display(DetectionData *data) {
+void Viewer::display(DetectionData *data) {
     this->data = data;
+    try {
+        data->load();
+    } catch (std::exception *ex) {
+        emit failure(data, ex);
+        return;
+    }
 
     setWindowFilePath(data->file);
     const QString message =
@@ -62,7 +68,7 @@ bool Viewer::display(DetectionData *data) {
         rejectItems << scene->addPolygon(polygon, pen);
     showRejects();
 
-    pen = QPen(Qt::yellow, 10);
+    pen = QPen(Qt::blue, 10);
     for (auto polygon : data->ungrouped)
         ungroupedItems << scene->addPolygon(polygon, pen);
     showUngrouped();
@@ -74,7 +80,7 @@ bool Viewer::display(DetectionData *data) {
     view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
     updateActions();
 
-    return true;
+    return;
 }
 
 void Viewer::clear() {
@@ -92,7 +98,20 @@ DetectionData *Viewer::current() { return data; }
 void Viewer::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (data) {
-            emit finished(data);
+            // only make pictures visible
+            showRejectsAct->setChecked(false);
+            showRejects();
+            showUngroupedAct->setChecked(false);
+            showUngrouped();
+
+            data->pictures = QList<QPolygon>();
+            for (auto item : scene->items())
+                if (item->isVisible())
+                    if (auto polygon_item =
+                            qgraphicsitem_cast<QGraphicsPolygonItem *>(item))
+                        data->pictures << polygon_item->polygon().toPolygon();
+
+            emit success(data);
             return;
         }
     }

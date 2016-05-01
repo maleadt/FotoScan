@@ -10,11 +10,13 @@
 struct DetectionData {
     QString file;
     QImage image;
+    DetectionData(const QString &file);
+    void load();
 
     // NOTE: actually rects, but easier to represent as 4 points
     QList<QPolygon> rejects, ungrouped, pictures;
 
-    std::chrono::milliseconds elapsed;
+    std::chrono::milliseconds elapsed = std::chrono::milliseconds::zero();
 };
 
 class DetectionTask : public QObject, public QRunnable {

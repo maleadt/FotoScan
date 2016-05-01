@@ -19,7 +19,8 @@ class Scanner : public QApplication {
   private slots:
     void onDetectionSuccess(DetectionData *);
     void onDetectionFailure(DetectionData *, std::exception *);
-    void onReviewFinished(DetectionData *);
+    void onReviewSuccess(DetectionData *);
+    void onReviewFailure(DetectionData *, std::exception *);
 
   private:
     void enqueueDetection();

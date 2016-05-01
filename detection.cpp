@@ -214,22 +214,28 @@ static QList<QRect> toRectList(ShapeList shapes) {
 // Public interface
 //
 
-DetectionTask::DetectionTask(QString file) {
-    data = new DetectionData();
-    data->file = file;
+DetectionData::DetectionData(const QString &file) : file(file) {}
+
+void DetectionData::load() {
+    if (image.isNull()) {
+        QImageReader reader(file);
+        reader.setAutoTransform(true);
+        image = reader.read();
+        if (image.isNull()) {
+            throw new std::runtime_error(QString("Cannot load %1: %2")
+                                             .arg(file, reader.errorString())
+                                             .toStdString());
+        }
+    }
 }
 
-void DetectionTask::run() {
-    QFileInfo finfo(data->file);
+DetectionTask::DetectionTask(QString file) : data(new DetectionData(file)) {}
 
-    QImageReader reader(data->file);
-    reader.setAutoTransform(true);
-    data->image = reader.read();
-    if (data->image.isNull()) {
-        emit failure(data, new std::runtime_error(
-                               QString("Cannot load %1: %2")
-                                   .arg(data->file, reader.errorString())
-                                   .toStdString()));
+void DetectionTask::run() {
+    try {
+        data->load();
+    } catch (std::exception *ex) {
+        emit failure(data, ex);
         return;
     }
 
