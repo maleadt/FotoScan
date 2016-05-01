@@ -155,19 +155,28 @@ bool cmp_pictures(const Shape &a, const Shape &b) {
 
 // Partition squares based on the area of their intersection
 ShapeList minimizeSquares(const ShapeList &squares) {
+    // partition squares according to the intersection area
     vector<int> labels;
     int groups = partition(squares, labels, cmp_pictures);
-    ShapeList grouped_squares(groups);
 
-    // reduce to groups, selecting the _smallest_ image
-    // TODO: save alternatives, allow selection through GUI
+    // for each group, select picture with straightest corners
+    ShapeList grouped_squares(groups);
+    vector<float> minCosines(groups);
     for (size_t i = 0; i < squares.size(); i++) {
         int group = labels[i];
-        if (grouped_squares[group].size() == 0)
+
+        // find the minimum cosine of the angle between joint edges
+        double minCosine = std::numeric_limits<double>::max();
+        for (int j = 2; j < 5; j++) {
+            double cosine =
+                fabs(angle(squares[i][j % 4], squares[i][j - 2], squares[i][j - 1]));
+            minCosine = min(minCosine, cosine);
+        }
+
+        if (grouped_squares[group].size() == 0 || minCosine < minCosines[group]) {
             grouped_squares[group] = squares[i];
-        else if (contourArea(Mat(squares[i])) <
-                 contourArea(Mat(grouped_squares[group])))
-            grouped_squares[group] = squares[i];
+            minCosines[group] = minCosine;
+        }
     }
 
     return grouped_squares;
