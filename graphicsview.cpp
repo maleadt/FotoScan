@@ -25,8 +25,12 @@ void GraphicsView::zoomOut() {
 
 void GraphicsView::clear() {
     selected = nullptr;
+    pending = nullptr;
     dragCorner = -1;
+    interactable = true;
 }
+
+void GraphicsView::setInteractable(bool v) { interactable = v; }
 
 void GraphicsView::wheelEvent(QWheelEvent *event) {
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
@@ -58,8 +62,8 @@ QGraphicsPolygonItem *GraphicsView::findPolygon(QPoint location) {
         if (auto polygon = qgraphicsitem_cast<QGraphicsPolygonItem *>(item)) {
             return polygon;
         }
-        return nullptr;
     }
+    return nullptr;
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent *event) {
@@ -68,23 +72,26 @@ void GraphicsView::mousePressEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
         setDragMode(QGraphicsView::ScrollHandDrag);
         QGraphicsView::mousePressEvent(event);
-    } else if (event->button() == Qt::RightButton) {
+    } else if (interactable && event->button() == Qt::RightButton) {
         // start of a click: handle selection of polygons
-        if (auto polygon = findPolygon(mousePressPosition)) {
-            if (selected == nullptr) {
-                // nothing selected, click inside a polygon --> select
-                select(polygon);
-                selected = polygon;
-            } else if (selected != polygon) {
-                // click inside other polygon --> select & unselect other
+        selectedAtPress = selected;
+        if (!pending) { // only applies when not drawing a polygon
+            if (auto polygon = findPolygon(mousePressPosition)) {
+                if (selected == nullptr) {
+                    // nothing selected, click inside a polygon --> select
+                    select(polygon);
+                    selected = polygon;
+                } else if (selected != polygon) {
+                    // click inside other polygon --> select & unselect other
+                    unselect(selected);
+                    select(polygon);
+                    selected = polygon;
+                }
+            } else if (selected) {
+                // didn't click inside a polygon, so unselect
                 unselect(selected);
-                select(polygon);
-                selected = polygon;
+                selected = nullptr;
             }
-        } else if (selected) {
-            // didn't click inside a polygon, so unselect
-            unselect(selected);
-            selected = nullptr;            
         }
 
         dragCorner = -1;
@@ -99,7 +106,7 @@ void GraphicsView::mouseMoveEvent(QMouseEvent *event) {
         setFocus(Qt::MouseFocusReason);
     }
 
-    if (event->buttons() & Qt::RightButton) {
+    if (interactable && event->buttons() & Qt::RightButton) {
         // moving while polygon selected and right button held --> corner drag
         if (selected) {
             if (dragCorner == -1) {
@@ -136,12 +143,83 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent *event) {
         QGraphicsView::mouseReleaseEvent(event);
         setCursor(Qt::ArrowCursor);
         setDragMode(QGraphicsView::NoDrag);
-    } else if (event->button() == Qt::RightButton) {
+    } else if (interactable && event->button() == Qt::RightButton) {
         // right-button click while nothing is selected --> define new polygon
-        if (!selected && mouseReleasePosition == mousePressPosition) {
+        if (mouseReleasePosition == mousePressPosition) {
+            if (!pending && !selected && !selectedAtPress) {
+                // initial point is an ellipse
+                QPen pen(Qt::yellow, 2);
+                QBrush brush(Qt::yellow);
+                QPointF pos = mapToScene(mousePressPosition);
+                pending = scene()->addEllipse(pos.x() - 10, pos.y() - 10, 20,
+                                              20, pen, brush);
+            } else if (pending) {
+                // replace the initial ellipse with a proper polygon
+                if (auto ellipse_item =
+                        qgraphicsitem_cast<QGraphicsEllipseItem *>(pending)) {
+                    QPolygonF polygon;
+                    polygon << ellipse_item->rect().center();
+                    pending = scene()->addPolygon(polygon, ellipse_item->pen(),
+                                                  ellipse_item->brush());
+                    scene()->removeItem(ellipse_item);
+                }
+
+                QPolygonF polygon;
+                auto polygon_item =
+                    qgraphicsitem_cast<QGraphicsPolygonItem *>(pending);
+                polygon << polygon_item->polygon();
+
+                polygon << mapToScene(mousePressPosition);
+                polygon_item->setPolygon(polygon);
+
+                // make sure the pending item is selected so that we can drag
+                // corners
+                select(polygon_item);
+                selected = polygon_item;
+            }
         }
 
     } else {
         QGraphicsView::mouseReleaseEvent(event);
     }
+}
+
+void GraphicsView::keyPressEvent(QKeyEvent *event) {
+    // return while pending polygon --> accept
+    if (pending &&
+        (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        auto polygon_item = qgraphicsitem_cast<QGraphicsPolygonItem *>(pending);
+        if (!polygon_item || polygon_item->polygon().size() < 3) {
+            // polygon too small
+            scene()->removeItem(pending);
+            selected = nullptr;
+            pending = nullptr;
+            return;
+        }
+
+        polygon_item->setPen(QPen(Qt::green));
+        unselect(polygon_item);
+        selected = nullptr;
+        pending = nullptr;
+
+        return;
+    }
+
+    // escape while pending polygon --> cancel
+    if (pending &&
+        (event->key() == Qt::Key_Escape || event->key() == Qt::Key_Delete)) {
+        scene()->removeItem(pending);
+        selected = nullptr;
+        pending = nullptr;
+        return;
+    }
+
+    // delete while selected polygon --> delete
+    if (selected && event->key() == Qt::Key_Delete) {
+        scene()->removeItem(selected);
+        selected = nullptr;
+        return;
+    }
+
+    QGraphicsView::keyPressEvent(event);
 }

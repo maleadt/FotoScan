@@ -93,8 +93,11 @@ void Viewer::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (data) {
             emit finished(data);
+            return;
         }
     }
+
+    QMainWindow::keyPressEvent(event);
 }
 
 void Viewer::zoomRestore() {
@@ -119,4 +122,7 @@ void Viewer::showUngrouped() {
     updateActions();
 }
 
-void Viewer::updateActions() {}
+void Viewer::updateActions() {
+    view->setInteractable(
+        !(showUngroupedAct->isChecked() | showRejectsAct->isChecked()));
+}
