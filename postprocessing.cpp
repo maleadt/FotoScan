@@ -42,8 +42,11 @@ void PostprocessTask::run() {
     if (data->image.format() == QImage::Format_RGB32)
         mat = Mat(data->image.height(), data->image.width(), CV_8UC4,
                   data->image.bits(), data->image.bytesPerLine());
-    else
-        mat = imread(data->file.toStdString(), 1);
+    else {
+        emit failure(data,
+                     new runtime_error("Could not convert Qt image to OpenCV"));
+        return;
+    }
 
     auto start = chrono::system_clock::now();
 
@@ -91,11 +94,11 @@ void PostprocessTask::run() {
         Mat sub_warped = Mat::zeros(sub_mat.rows, sub_mat.cols, sub_mat.type());
         warpPerspective(sub_mat, sub_warped, warp_mat, sub_warped.size());
 
-        Mat output(sub_warped.cols, sub_warped.rows, sub_warped.type());
-        cvtColor(sub_warped, output, CV_BGR2RGB);
+        const auto qt_output =
+            QImage((uchar *)sub_warped.data, sub_warped.cols, sub_warped.rows,
+                   sub_warped.step, data->image.format());
         #pragma omp critical
-        data->images << QImage((uchar *)output.data, output.cols, output.rows,
-                               output.step, QImage::Format_RGB888);
+        data->images << qt_output.copy();
     }
 
     auto end = chrono::system_clock::now();

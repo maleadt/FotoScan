@@ -4,6 +4,7 @@
 #include <QMutex>
 #include <QThreadPool>
 #include <QImage>
+#include <QDir>
 
 #include "viewer.hpp"
 
@@ -30,7 +31,9 @@ class Scanner : public QApplication {
 
   public:
     Scanner(int &argc, char *argv[]);
-    int scan(QString);
+    int scan();
+    void setOutputDir(QString dir);
+    void setInputDir(QString dir);
 
   public slots:
     void onEventLoopStarted();
@@ -44,9 +47,13 @@ class Scanner : public QApplication {
     void onPostprocessFailure(ImageData *, std::exception *);
 
   private:
+    int scan(QString);
     void enqueue();
 
     Viewer viewer;
+
+    QDir inputDir;
+    QDir outputDir = QDir::current();
 
     QThreadPool pool;
     QMutex queueLock;

@@ -232,8 +232,11 @@ void DetectionTask::run() {
     if (data->image.format() == QImage::Format_RGB32)
         mat = Mat(data->image.height(), data->image.width(), CV_8UC4,
                   data->image.bits(), data->image.bytesPerLine());
-    else
-        mat = imread(data->file.toStdString(), 1);
+    else {
+        emit failure(data,
+                     new runtime_error("Could not convert Qt image to OpenCV"));
+        return;
+    }
     cv_contours = extractContours(mat);
 
     cv_ungrouped =

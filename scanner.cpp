@@ -4,6 +4,7 @@
 #include <QStatusBar>
 #include <QDebug>
 #include <QImageReader>
+#include <QImageWriter>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -16,6 +17,8 @@
 #define DETECTION_BUFFER 8
 #define DETECTION_PRIORITY 1
 #define POSTPROCESS_PRIORITY 0
+
+using namespace std;
 
 
 //
@@ -30,9 +33,9 @@ void ImageData::load() {
         reader.setAutoTransform(true);
         image = reader.read();
         if (image.isNull()) {
-            throw new std::runtime_error(QString("Cannot load %1: %2")
-                                             .arg(file, reader.errorString())
-                                             .toStdString());
+            throw new runtime_error(QString("Cannot load %1: %2")
+                                        .arg(file, reader.errorString())
+                                        .toStdString());
         }
     }
 }
@@ -88,6 +91,13 @@ static QJsonDocument toJson(const ImageData *data) {
     return doc;
 }
 
+int Scanner::scan() {
+    if (inputDir == QDir())
+        throw runtime_error("No input directory set");
+
+    return scan(inputDir.absolutePath());
+}
+
 int Scanner::scan(QString path) {
     QFileInfo finfo(path);
     if (finfo.isFile()) {
@@ -106,9 +116,9 @@ int Scanner::scan(QString path) {
 
         // check if already processed
         // TODO: duplicate code
-        QFile results(QString("%1/%2.dat")
-                          .arg(finfo.absolutePath())
-                          .arg(finfo.completeBaseName()));
+        QDir dir(finfo.absolutePath());
+        QFile results(dir.absoluteFilePath(
+            QString("%1.dat").arg(finfo.completeBaseName())));
         if (results.exists()) {
             if (results.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 QString json = results.readAll();
@@ -117,8 +127,10 @@ int Scanner::scan(QString path) {
                 ImageData *data = new ImageData(path);
                 fromJson(data, doc);
 
+                // TODO: we might want to correct some results,
+                //       so conditionally allow that based on the arguments?
                 queueLock.lock();
-                toReview << data;
+                toPostprocess << data;
                 queueLock.unlock();
             } else {
                 qCritical() << QString("Could not read results for %1: %2")
@@ -139,16 +151,27 @@ int Scanner::scan(QString path) {
             files += scan(it.next());
         return files;
     } else
-        throw std::runtime_error(
+        throw runtime_error(
             QString("Unable to handle %1").arg(path).toStdString());
 }
+
+void Scanner::setOutputDir(QString dir) { outputDir = QDir(dir); }
+
+void Scanner::setInputDir(QString dir) { inputDir = QDir(dir); }
 
 void Scanner::enqueue() {
     queueLock.lock();
 
     // review
     if (viewer.current() == nullptr && toReview.size() > 0) {
-        viewer.display(toReview.takeFirst());
+        auto data = toReview.takeFirst();
+        const QString message =
+            tr("Reviewing \"%1\",detected %2 pictures in %3 ms")
+                .arg(inputDir.relativeFilePath(data->file))
+                .arg(data->pictures.size())
+                .arg(data->elapsed.count());
+        viewer.statusBar()->showMessage(message);
+        viewer.display(data);
     }
 
     // detection
@@ -189,7 +212,7 @@ void Scanner::onDetectionSuccess(ImageData *data) {
     enqueue();
 }
 
-void Scanner::onDetectionFailure(ImageData *data, std::exception *ex) {
+void Scanner::onDetectionFailure(ImageData *data, exception *ex) {
     qCritical() << QString("Detection for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());
@@ -202,13 +225,13 @@ void Scanner::onDetectionFailure(ImageData *data, std::exception *ex) {
 void Scanner::onReviewSuccess(ImageData *data) {
     viewer.clear();
 
-    QJsonDocument doc = toJson(data);
     QFileInfo finfo(data->file);
-    QFile results(QString("%1/%2.dat")
-                      .arg(finfo.absolutePath())
-                      .arg(finfo.completeBaseName()));
+    QDir dir(finfo.absolutePath());
+    QFile results(
+        dir.absoluteFilePath(QString("%1.dat").arg(finfo.completeBaseName())));
     if (results.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream stream(&results);
+        QJsonDocument doc = toJson(data);
         stream << doc.toJson();
     } else {
         qCritical() << QString("Could not write results for %1: %2")
@@ -223,7 +246,7 @@ void Scanner::onReviewSuccess(ImageData *data) {
     enqueue();
 }
 
-void Scanner::onReviewFailure(ImageData *data, std::exception *ex) {
+void Scanner::onReviewFailure(ImageData *data, exception *ex) {
     viewer.clear();
 
     qCritical() << QString("Review for %1 failed: %2")
@@ -236,12 +259,35 @@ void Scanner::onReviewFailure(ImageData *data, std::exception *ex) {
 }
 
 void Scanner::onPostprocessSuccess(ImageData *data) {
+    QImageReader reader(data->file);
+
+    QString relative_input = inputDir.relativeFilePath(data->file);
+    QString output = outputDir.absoluteFilePath(relative_input);
+    QFileInfo finfo(output);
+    for (int i = 0; i < data->images.size(); ++i) {
+        auto image = data->images[i];
+        QDir output_dir(finfo.absolutePath());
+        QFile output_split(
+            output_dir.absoluteFilePath(QString("%1_%2.%3")
+                                            .arg(finfo.completeBaseName())
+                                            .arg(i)
+                                            .arg(finfo.suffix())));
+        QString output_split_path = QFileInfo(output_split).absoluteFilePath();
+        QDir().mkpath(QFileInfo(output_split).absolutePath());
+        QImageWriter writer(output_split_path, reader.format());
+        if (!writer.write(image)) {
+            qCritical() << QString("Saving %1 failed: %2")
+                               .arg(output_split_path)
+                               .arg(writer.errorString());
+        }
+    }
+
     delete data;
 
     enqueue();
 }
 
-void Scanner::onPostprocessFailure(ImageData *data, std::exception *ex) {
+void Scanner::onPostprocessFailure(ImageData *data, exception *ex) {
     qCritical() << QString("Postprocess for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());

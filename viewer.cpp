@@ -50,14 +50,6 @@ void Viewer::display(ImageData *data) {
     }
 
     setWindowFilePath(data->file);
-    const QString message =
-        tr("Showing \"%1\", %2x%3, detected %4 pictures in %5 ms")
-            .arg(QDir::toNativeSeparators(data->file))
-            .arg(data->image.width())
-            .arg(data->image.height())
-            .arg(data->pictures.size())
-            .arg(data->elapsed.count());
-    statusBar()->showMessage(message);
 
     imageItem = scene->addPixmap(QPixmap::fromImage(data->image));
 
