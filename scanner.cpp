@@ -3,15 +3,20 @@
 #include <QDirIterator>
 #include <QStatusBar>
 #include <QDebug>
-#include <QThreadPool>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 
-#define BUFFER 8
+// Although limited by QThreadPool, don't have too many detection tasks alive
+// to reduce memory usage
+#define DETECTION_BUFFER 8
 
 Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
     QGuiApplication::setApplicationDisplayName("Foto Scanner");
+
+#if defined(_OPENMP)
+    pool.setMaxThreadCount(1);
+#endif
 
     connect(&viewer, SIGNAL(success(DetectionData *)), this,
             SLOT(onReviewSuccess(DetectionData *)));
@@ -114,13 +119,13 @@ int Scanner::scan(QString path) {
 
 void Scanner::enqueueDetection() {
     queueLock.lock();
-    if (toDetect.size() > 0 && toReview.size() < BUFFER) {
+    if (toDetect.size() > 0 && toReview.size() < DETECTION_BUFFER) {
         auto T = new DetectionTask(toDetect.takeFirst());
         connect(T, SIGNAL(success(DetectionData *)), this,
                 SLOT(onDetectionSuccess(DetectionData *)));
         connect(T, SIGNAL(failure(DetectionData *, std::exception *)), this,
                 SLOT(onDetectionFailure(DetectionData *, std::exception *)));
-        QThreadPool::globalInstance()->start(T);
+        pool.start(T);
     }
     queueLock.unlock();
 }
@@ -136,6 +141,7 @@ void Scanner::enqueueReview() {
 void Scanner::onEventLoopStarted() {
     viewer.statusBar()->showMessage(
         QString("Loaded %1 image(s)").arg(toDetect.size()));
+    enqueueReview();
     enqueueDetection();
 }
 

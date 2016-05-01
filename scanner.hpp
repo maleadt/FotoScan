@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QMutex>
+#include <QThreadPool>
 
 #include "detection.hpp"
 #include "viewer.hpp"
@@ -28,6 +29,7 @@ class Scanner : public QApplication {
 
     Viewer viewer;
 
+    QThreadPool pool;
     QMutex queueLock;
     QList<QString> toDetect;
     QList<DetectionData *> toReview;
