@@ -24,7 +24,9 @@ class GraphicsView : public QGraphicsView {
     void mouseReleaseEvent(QMouseEvent *event);
 
   private:
-    QPoint mousePosition, dragPosition;
-    QGraphicsPolygonItem *selected = nullptr;
+    QGraphicsPolygonItem *findPolygon(QPoint location);
+
+    QPoint mousePressPosition, mouseMovePosition;
+    QGraphicsPolygonItem *selected = nullptr, *pending = nullptr;
     int dragCorner;
 };

@@ -53,36 +53,38 @@ static void unselect(QGraphicsPolygonItem *item) {
     item->setPen(pen);
 }
 
+QGraphicsPolygonItem *GraphicsView::findPolygon(QPoint location) {
+    for (auto item : items(location)) {
+        if (auto polygon = qgraphicsitem_cast<QGraphicsPolygonItem *>(item)) {
+            return polygon;
+        }
+        return nullptr;
+    }
+}
+
 void GraphicsView::mousePressEvent(QMouseEvent *event) {
-    mousePosition = event->pos();
+    mousePressPosition = event->pos();
 
     if (event->button() == Qt::LeftButton) {
         setDragMode(QGraphicsView::ScrollHandDrag);
         QGraphicsView::mousePressEvent(event);
     } else if (event->button() == Qt::RightButton) {
-        // dealing with a click
-        size_t matches = 0;
-        for (auto item : items(mousePosition)) {
-            if (auto polygon =
-                    qgraphicsitem_cast<QGraphicsPolygonItem *>(item)) {
-                matches++;
-                if (selected == nullptr) {
-                    // nothing selected, click inside a polygon --> select
-                    select(polygon);
-                    selected = polygon;
-                } else if (selected != polygon) {
-                    // click inside other polygon --> select & unselect other
-                    unselect(selected);
-                    select(polygon);
-                    selected = polygon;
-                }
+        // start of a click: handle selection of polygons
+        if (auto polygon = findPolygon(mousePressPosition)) {
+            if (selected == nullptr) {
+                // nothing selected, click inside a polygon --> select
+                select(polygon);
+                selected = polygon;
+            } else if (selected != polygon) {
+                // click inside other polygon --> select & unselect other
+                unselect(selected);
+                select(polygon);
+                selected = polygon;
             }
-        }
-
-        if (matches == 0 && selected) {
+        } else if (selected) {
             // didn't click inside a polygon, so unselect
             unselect(selected);
-            selected = nullptr;
+            selected = nullptr;            
         }
 
         dragCorner = -1;
@@ -98,27 +100,28 @@ void GraphicsView::mouseMoveEvent(QMouseEvent *event) {
     }
 
     if (event->buttons() & Qt::RightButton) {
+        // moving while polygon selected and right button held --> corner drag
         if (selected) {
             if (dragCorner == -1) {
                 qreal min_distance = std::numeric_limits<qreal>::max();
                 for (int i = 0; i < selected->polygon().size(); ++i) {
                     auto point = selected->polygon()[i];
-                    qreal distance =
-                        (point - mapToScene(mousePosition)).manhattanLength();
+                    qreal distance = (point - mapToScene(mousePressPosition))
+                                         .manhattanLength();
                     if (distance < min_distance && distance < 500) {
                         dragCorner = i;
                         min_distance = distance;
                     }
                 }
                 if (dragCorner != -1)
-                    dragPosition = event->pos();
+                    mouseMovePosition = event->pos();
             } else {
                 QPointF delta =
-                    mapToScene(event->pos()) - mapToScene(dragPosition);
+                    mapToScene(event->pos()) - mapToScene(mouseMovePosition);
                 auto polygon = selected->polygon();
                 polygon[dragCorner] += delta;
                 selected->setPolygon(polygon);
-                dragPosition = event->pos();
+                mouseMovePosition = event->pos();
             }
         }
     }
@@ -127,10 +130,17 @@ void GraphicsView::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void GraphicsView::mouseReleaseEvent(QMouseEvent *event) {
+    QPoint mouseReleasePosition = event->pos();
+
     if (event->button() == Qt::LeftButton) {
         QGraphicsView::mouseReleaseEvent(event);
         setCursor(Qt::ArrowCursor);
         setDragMode(QGraphicsView::NoDrag);
+    } else if (event->button() == Qt::RightButton) {
+        // right-button click while nothing is selected --> define new polygon
+        if (!selected && mouseReleasePosition == mousePressPosition) {
+        }
+
     } else {
         QGraphicsView::mouseReleaseEvent(event);
     }
