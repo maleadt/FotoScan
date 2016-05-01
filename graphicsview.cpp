@@ -57,13 +57,22 @@ static void unselect(QGraphicsPolygonItem *item) {
     item->setPen(pen);
 }
 
+// Find the polygon at the current location (if multiple, select smallest)
 QGraphicsPolygonItem *GraphicsView::findPolygon(QPoint location) {
+    float smallest_area = std::numeric_limits<float>::max();
+    QGraphicsPolygonItem *smallest = nullptr;
+
     for (auto item : items(location)) {
         if (auto polygon = qgraphicsitem_cast<QGraphicsPolygonItem *>(item)) {
-            return polygon;
+            auto rect = polygon->boundingRect();
+            float area = rect.height() * rect.width();
+            if (!smallest || area < smallest_area) {
+                smallest = polygon;
+                smallest_area = area;
+            }
         }
     }
-    return nullptr;
+    return smallest;
 }
 
 void GraphicsView::mousePressEvent(QMouseEvent *event) {
