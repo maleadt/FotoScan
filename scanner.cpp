@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDateTime>
 
 #include "detection.hpp"
 #include "postprocessing.hpp"
@@ -76,6 +77,18 @@ static QJsonDocument toJson(const ImageData *data) {
     return doc;
 }
 
+static QString getResultPath(QFileInfo image_info) {
+    QDir dir(image_info.absolutePath());
+    QFile result(dir.absoluteFilePath(
+        QString("%1.dat").arg(image_info.completeBaseName())));
+    QFileInfo result_info(result);
+    return result_info.absoluteFilePath();
+}
+
+static QString getResultPath(QString image) {
+    return getResultPath(QFileInfo(image));
+}
+
 
 //
 // Scanner
@@ -105,6 +118,8 @@ int Scanner::scan() {
 
 int Scanner::scan(QString path) {
     QFileInfo finfo(path);
+
+    // file handling: verify extension, check for previous results, add to queue
     if (finfo.isFile()) {
         // check file extension
         const QStringList extensions = {"jpg", "png"};
@@ -120,10 +135,7 @@ int Scanner::scan(QString path) {
             return 0;
 
         // check if already processed
-        // TODO: duplicate code
-        QDir dir(finfo.absolutePath());
-        QFile results(dir.absoluteFilePath(
-            QString("%1.dat").arg(finfo.completeBaseName())));
+        QFile results(getResultPath(finfo));
         if (results.exists()) {
             if (results.open(QIODevice::ReadOnly | QIODevice::Text)) {
                 QString json = results.readAll();
@@ -132,37 +144,46 @@ int Scanner::scan(QString path) {
                 ImageData *data = new ImageData(path);
                 fromJson(data, doc);
 
-                // TODO: we might want to correct some results,
-                //       so conditionally allow that based on the arguments?
                 queueLock.lock();
-                toPostprocess << data;
+                if (mode == ProgramMode::CORRECT_RESULTS)
+                    toReview << data;
+                else
+                    toPostprocess << data;
                 queueLock.unlock();
             } else {
                 qCritical() << QString("Could not read results for %1: %2")
                                    .arg(path)
                                    .arg(results.errorString());
             }
-        } else {
+        } else if (mode != ProgramMode::CORRECT_RESULTS) {
             queueLock.lock();
             toDetect << new ImageData(path);
             queueLock.unlock();
         }
         return 1;
 
-    } else if (finfo.isDir()) {
+    }
+
+    // directory handling: recursively scan
+    else if (finfo.isDir()) {
         size_t files = 0;
         QDirIterator it(path, QDir::Files, QDirIterator::Subdirectories);
         while (it.hasNext())
             files += scan(it.next());
         return files;
-    } else
+    }
+
+    else {
         throw runtime_error(
             QString("Unable to handle %1").arg(path).toStdString());
+    }
 }
 
 void Scanner::setOutputDir(QString dir) { outputDir = QDir(dir); }
 
 void Scanner::setInputDir(QString dir) { inputDir = QDir(dir); }
+
+void Scanner::setMode(ProgramMode mode) { this->mode = mode; }
 
 // Enqueue now work for all primary tasks (detect -> review -> post-process)
 void Scanner::enqueue() {
@@ -212,6 +233,15 @@ void Scanner::onEventLoopStarted() {
     viewer.statusBar()->showMessage(
         QString("Loaded %1 image(s)").arg(toDetect.size()));
 
+    // when correcting results, process the most recently modified one first
+    if (mode == ProgramMode::CORRECT_RESULTS) {
+        sort(toReview.begin(), toReview.end(),
+             [](const ImageData *a, const ImageData *b) -> bool {
+                 return QFileInfo(getResultPath(a->file)).lastModified() >
+                        QFileInfo(getResultPath(b->file)).lastModified();
+             });
+    }
+
     enqueue();
 }
 
@@ -237,9 +267,7 @@ void Scanner::onReviewSuccess(ImageData *data) {
     viewer.clear();
 
     QFileInfo finfo(data->file);
-    QDir dir(finfo.absolutePath());
-    QFile results(
-        dir.absoluteFilePath(QString("%1.dat").arg(finfo.completeBaseName())));
+    QFile results(getResultPath(finfo));
     if (results.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream stream(&results);
         QJsonDocument doc = toJson(data);

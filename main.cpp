@@ -21,7 +21,16 @@ int main(int argc, char *argv[]) {
         "Write images to <directory>.", "directory");
     parser.addOption(outputDirectoryOption);
 
+    QCommandLineOption correctOption(QStringList() << "c"
+                                                   << "correct",
+                                     "Correct most recent results");
+    parser.addOption(correctOption);
+
     parser.process(app);
+
+    bool correct = parser.isSet(correctOption);
+    if (correct)
+        app.setMode(ProgramMode::CORRECT_RESULTS);
 
     const QStringList args = parser.positionalArguments();
     if (args.size() != 1) {

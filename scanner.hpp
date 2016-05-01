@@ -10,6 +10,8 @@
 
 #include <chrono>
 
+enum class ProgramMode { DEFAULT, CORRECT_RESULTS };
+
 struct ImageData {
     QString file;
     QImage image;
@@ -34,6 +36,7 @@ class Scanner : public QApplication {
     int scan();
     void setOutputDir(QString dir);
     void setInputDir(QString dir);
+    void setMode(ProgramMode);
 
   public slots:
     void onEventLoopStarted();
@@ -51,6 +54,8 @@ class Scanner : public QApplication {
     void enqueue();
 
     Viewer viewer;
+
+    ProgramMode mode = ProgramMode::DEFAULT;
 
     QDir inputDir;
     QDir outputDir = QDir::current();
