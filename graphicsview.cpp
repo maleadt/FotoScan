@@ -4,6 +4,7 @@
 #include <QWheelEvent>
 #include <QDebug>
 #include <QGraphicsPolygonItem>
+#include <QMessageBox>
 
 static const double scaleFactor = 1.15;
 static double currentScale = 1.0; // stores the current scale value.
@@ -198,11 +199,13 @@ void GraphicsView::keyPressEvent(QKeyEvent *event) {
     if (pending &&
         (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
         auto polygon_item = qgraphicsitem_cast<QGraphicsPolygonItem *>(pending);
-        if (!polygon_item || polygon_item->polygon().size() < 3) {
-            // polygon too small
+        if (!polygon_item || polygon_item->polygon().size() != 4) {
+            // polygon has wrong amount of points
             scene()->removeItem(pending);
             selected = nullptr;
             pending = nullptr;
+            QMessageBox messageBox;
+            messageBox.critical(0, "Error", "Picture should have 4 corners");
             return;
         }
 
