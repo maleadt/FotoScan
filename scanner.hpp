@@ -3,9 +3,24 @@
 #include <QApplication>
 #include <QMutex>
 #include <QThreadPool>
+#include <QImage>
 
 #include "detection.hpp"
 #include "viewer.hpp"
+
+#include <chrono>
+
+struct ImageData {
+    QString file;
+    QImage image;
+    ImageData(const QString &file);
+    void load();
+
+    // NOTE: actually rects, but easier to represent as 4 points
+    QList<QPolygon> rejects, ungrouped, pictures;
+
+    std::chrono::milliseconds elapsed = std::chrono::milliseconds::zero();
+};
 
 class Scanner : public QApplication {
     Q_OBJECT
@@ -18,10 +33,10 @@ class Scanner : public QApplication {
     void onEventLoopStarted();
 
   private slots:
-    void onDetectionSuccess(DetectionData *);
-    void onDetectionFailure(DetectionData *, std::exception *);
-    void onReviewSuccess(DetectionData *);
-    void onReviewFailure(DetectionData *, std::exception *);
+    void onDetectionSuccess(ImageData *);
+    void onDetectionFailure(ImageData *, std::exception *);
+    void onReviewSuccess(ImageData *);
+    void onReviewFailure(ImageData *, std::exception *);
 
   private:
     void enqueueDetection();
@@ -31,6 +46,6 @@ class Scanner : public QApplication {
 
     QThreadPool pool;
     QMutex queueLock;
-    QList<QString> toDetect;
-    QList<DetectionData *> toReview;
+    QList<ImageData *> toDetect;
+    QList<ImageData *> toReview;
 };

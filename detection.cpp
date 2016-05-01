@@ -2,7 +2,6 @@
 
 #include <QFileInfo>
 #include <QDebug>
-#include <QImageReader>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/objdetect/objdetect.hpp>
@@ -16,6 +15,7 @@
 #include <chrono>
 
 #include "clip.hpp"
+#include "scanner.hpp"
 
 using namespace cv;
 using namespace std;
@@ -214,22 +214,7 @@ static QList<QRect> toRectList(ShapeList shapes) {
 // Public interface
 //
 
-DetectionData::DetectionData(const QString &file) : file(file) {}
-
-void DetectionData::load() {
-    if (image.isNull()) {
-        QImageReader reader(file);
-        reader.setAutoTransform(true);
-        image = reader.read();
-        if (image.isNull()) {
-            throw new std::runtime_error(QString("Cannot load %1: %2")
-                                             .arg(file, reader.errorString())
-                                             .toStdString());
-        }
-    }
-}
-
-DetectionTask::DetectionTask(QString file) : data(new DetectionData(file)) {}
+DetectionTask::DetectionTask(ImageData *data) : data(data) {}
 
 void DetectionTask::run() {
     try {

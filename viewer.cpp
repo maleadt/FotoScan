@@ -40,7 +40,7 @@ Viewer::Viewer() : scene(new QGraphicsScene), view(new GraphicsView(scene)) {
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 }
 
-void Viewer::display(DetectionData *data) {
+void Viewer::display(ImageData *data) {
     this->data = data;
     try {
         data->load();
@@ -93,7 +93,7 @@ void Viewer::clear() {
     view->clear();
 }
 
-DetectionData *Viewer::current() { return data; }
+ImageData *Viewer::current() { return data; }
 
 void Viewer::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {

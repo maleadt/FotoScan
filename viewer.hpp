@@ -9,16 +9,16 @@ class QGraphicsScene;
 class QGraphicsView;
 class QGraphicsItem;
 class QAction;
-struct DetectionData;
+struct ImageData;
 
 class Viewer : public QMainWindow {
     Q_OBJECT
 
   public:
     Viewer();
-    void display(DetectionData *);
+    void display(ImageData *);
     void clear();
-    DetectionData *current();
+    ImageData *current();
 
   protected:
     virtual void keyPressEvent(QKeyEvent *event);
@@ -29,13 +29,13 @@ class Viewer : public QMainWindow {
     void showUngrouped();
 
   signals:
-    void success(DetectionData *);
-    void failure(DetectionData *, std::exception *);
+    void success(ImageData *);
+    void failure(ImageData *, std::exception *);
 
   private:
     void updateActions();
 
-    DetectionData *data = nullptr;
+    ImageData *data = nullptr;
 
     QGraphicsScene *scene;
     GraphicsView *view;

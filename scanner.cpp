@@ -3,13 +3,36 @@
 #include <QDirIterator>
 #include <QStatusBar>
 #include <QDebug>
+#include <QImageReader>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 
 // Although limited by QThreadPool, don't have too many detection tasks alive
-// to reduce memory usage
+// to reduce memory usage and allow the postprocess task to run
 #define DETECTION_BUFFER 8
+#define DETECTION_PRIORITY 1
+#define POSTPROCESS_PRIORITY 0
+
+
+//
+// ImageData
+//
+
+ImageData::ImageData(const QString &file) : file(file) {}
+
+void ImageData::load() {
+    if (image.isNull()) {
+        QImageReader reader(file);
+        reader.setAutoTransform(true);
+        image = reader.read();
+        if (image.isNull()) {
+            throw new std::runtime_error(QString("Cannot load %1: %2")
+                                             .arg(file, reader.errorString())
+                                             .toStdString());
+        }
+    }
+}
 
 Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
     QGuiApplication::setApplicationDisplayName("Foto Scanner");
@@ -18,15 +41,15 @@ Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
     pool.setMaxThreadCount(1);
 #endif
 
-    connect(&viewer, SIGNAL(success(DetectionData *)), this,
-            SLOT(onReviewSuccess(DetectionData *)));
-    connect(&viewer, SIGNAL(failure(DetectionData *, std::exception *)), this,
-            SLOT(onReviewFailure(DetectionData *, std::exception *)));
+    connect(&viewer, SIGNAL(success(ImageData *)), this,
+            SLOT(onReviewSuccess(ImageData *)));
+    connect(&viewer, SIGNAL(failure(ImageData *, std::exception *)), this,
+            SLOT(onReviewFailure(ImageData *, std::exception *)));
 
     viewer.show();
 }
 
-static void fromJson(DetectionData *data, QJsonDocument doc) {
+static void fromJson(ImageData *data, QJsonDocument doc) {
     QJsonObject root = doc.object();
     QJsonArray json_pictures = root["pictures"].toArray();
     for (auto json_picture_obj : json_pictures) {
@@ -40,7 +63,7 @@ static void fromJson(DetectionData *data, QJsonDocument doc) {
     }
 }
 
-static QJsonDocument toJson(const DetectionData *data) {
+static QJsonDocument toJson(const ImageData *data) {
     QJsonArray json_pictures;
     for (auto picture : data->pictures) {
         QJsonArray json_picture;
@@ -88,7 +111,7 @@ int Scanner::scan(QString path) {
                 QString json = results.readAll();
                 QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
 
-                DetectionData *data = new DetectionData(path);
+                ImageData *data = new ImageData(path);
                 fromJson(data, doc);
 
                 queueLock.lock();
@@ -101,7 +124,7 @@ int Scanner::scan(QString path) {
             }
         } else {
             queueLock.lock();
-            toDetect << path;
+            toDetect << new ImageData(path);
             queueLock.unlock();
         }
         return 1;
@@ -121,11 +144,11 @@ void Scanner::enqueueDetection() {
     queueLock.lock();
     if (toDetect.size() > 0 && toReview.size() < DETECTION_BUFFER) {
         auto T = new DetectionTask(toDetect.takeFirst());
-        connect(T, SIGNAL(success(DetectionData *)), this,
-                SLOT(onDetectionSuccess(DetectionData *)));
-        connect(T, SIGNAL(failure(DetectionData *, std::exception *)), this,
-                SLOT(onDetectionFailure(DetectionData *, std::exception *)));
-        pool.start(T);
+        connect(T, SIGNAL(success(ImageData *)), this,
+                SLOT(onDetectionSuccess(ImageData *)));
+        connect(T, SIGNAL(failure(ImageData *, std::exception *)), this,
+                SLOT(onDetectionFailure(ImageData *, std::exception *)));
+        pool.start(T, DETECTION_PRIORITY);
     }
     queueLock.unlock();
 }
@@ -145,7 +168,7 @@ void Scanner::onEventLoopStarted() {
     enqueueDetection();
 }
 
-void Scanner::onDetectionSuccess(DetectionData *data) {
+void Scanner::onDetectionSuccess(ImageData *data) {
     queueLock.lock();
     toReview << data;
     queueLock.unlock();
@@ -154,7 +177,7 @@ void Scanner::onDetectionSuccess(DetectionData *data) {
     enqueueDetection();
 }
 
-void Scanner::onDetectionFailure(DetectionData *data, std::exception *ex) {
+void Scanner::onDetectionFailure(ImageData *data, std::exception *ex) {
     qCritical() << QString("Detection for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());
@@ -164,7 +187,7 @@ void Scanner::onDetectionFailure(DetectionData *data, std::exception *ex) {
     enqueueDetection();
 }
 
-void Scanner::onReviewSuccess(DetectionData *data) {
+void Scanner::onReviewSuccess(ImageData *data) {
     QJsonDocument doc = toJson(data);
 
     QFileInfo finfo(data->file);
@@ -187,7 +210,7 @@ void Scanner::onReviewSuccess(DetectionData *data) {
     enqueueDetection();
 }
 
-void Scanner::onReviewFailure(DetectionData *data, std::exception *ex) {
+void Scanner::onReviewFailure(ImageData *data, std::exception *ex) {
     qCritical() << QString("Review for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());
