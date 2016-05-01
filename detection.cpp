@@ -174,12 +174,13 @@ ShapeList minimizeSquares(const ShapeList &squares) {
         // find the minimum cosine of the angle between joint edges
         double minCosine = std::numeric_limits<double>::max();
         for (int j = 2; j < 5; j++) {
-            double cosine =
-                fabs(angle(squares[i][j % 4], squares[i][j - 2], squares[i][j - 1]));
+            double cosine = fabs(
+                angle(squares[i][j % 4], squares[i][j - 2], squares[i][j - 1]));
             minCosine = min(minCosine, cosine);
         }
 
-        if (grouped_squares[group].size() == 0 || minCosine < minCosines[group]) {
+        if (grouped_squares[group].size() == 0 ||
+            minCosine < minCosines[group]) {
             grouped_squares[group] = squares[i];
             minCosines[group] = minCosine;
         }

@@ -15,10 +15,12 @@ Viewer::Viewer() : scene(new QGraphicsScene), view(new GraphicsView(scene)) {
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
 
-    zoomInAct = viewMenu->addAction(tr("Zoom &In"), view, &GraphicsView::zoomIn);
+    zoomInAct =
+        viewMenu->addAction(tr("Zoom &In"), view, &GraphicsView::zoomIn);
     zoomInAct->setShortcut(QKeySequence::ZoomIn);
 
-    zoomOutAct = viewMenu->addAction(tr("Zoom &Out"), view, &GraphicsView::zoomOut);
+    zoomOutAct =
+        viewMenu->addAction(tr("Zoom &Out"), view, &GraphicsView::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
 
     zoomRestoreAct =
