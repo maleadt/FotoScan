@@ -15,8 +15,12 @@ struct ImageData {
     ImageData(const QString &file);
     void load();
 
+    // result of detection
     // NOTE: actually rects, but easier to represent as 4 points
     QList<QPolygon> rejects, ungrouped, pictures;
+
+    // result of post-processing
+    QList<QImage> images;
 
     std::chrono::milliseconds elapsed = std::chrono::milliseconds::zero();
 };

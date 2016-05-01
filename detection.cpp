@@ -242,7 +242,7 @@ void DetectionTask::run() {
     cv_pictures = minimizeSquares(cv_ungrouped);
 
     auto end = chrono::system_clock::now();
-    data->elapsed = chrono::duration_cast<chrono::milliseconds>(end - start);
+    data->elapsed += chrono::duration_cast<chrono::milliseconds>(end - start);
 
     data->rejects = toPolygonList(cv_rejects);
     data->ungrouped = toPolygonList(cv_ungrouped);
