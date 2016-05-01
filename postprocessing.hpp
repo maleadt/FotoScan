@@ -2,9 +2,8 @@
 
 #include <QObject>
 #include <QRunnable>
-#include <QString>
 
-class ImageData;
+struct ImageData;
 
 class PostprocessTask : public QObject, public QRunnable {
     Q_OBJECT

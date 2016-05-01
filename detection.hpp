@@ -4,7 +4,7 @@
 #include <QRunnable>
 #include <QString>
 
-class ImageData;
+struct ImageData;
 
 class DetectionTask : public QObject, public QRunnable {
     Q_OBJECT

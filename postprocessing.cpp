@@ -1,9 +1,6 @@
 #include "postprocessing.hpp"
 
-#include <QDebug>
-
 #include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include <chrono>
@@ -15,10 +12,8 @@ using namespace std;
 
 
 //
-// PostprocessTask
+// Auxiliary
 //
-
-PostprocessTask::PostprocessTask(ImageData *data) : data(data) {}
 
 static bool isClockwise(const QPolygon &polygon) {
     double sum = 0.0;
@@ -30,7 +25,15 @@ static bool isClockwise(const QPolygon &polygon) {
     return sum < 0.0;
 }
 
+
+//
+// PostprocessTask
+//
+
+PostprocessTask::PostprocessTask(ImageData *data) : data(data) {}
+
 void PostprocessTask::run() {
+    // Lazy-load image data
     try {
         data->load();
     } catch (exception *ex) {
@@ -38,6 +41,7 @@ void PostprocessTask::run() {
         return;
     }
 
+    // Convert to OpenCV format
     Mat mat;
     if (data->image.format() == QImage::Format_RGB32)
         mat = Mat(data->image.height(), data->image.width(), CV_8UC4,

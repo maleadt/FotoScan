@@ -40,21 +40,6 @@ void ImageData::load() {
     }
 }
 
-Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
-    QGuiApplication::setApplicationDisplayName("Foto Scanner");
-
-#if defined(_OPENMP)
-    pool.setMaxThreadCount(1);
-#endif
-
-    connect(&viewer, SIGNAL(success(ImageData *)), this,
-            SLOT(onReviewSuccess(ImageData *)));
-    connect(&viewer, SIGNAL(failure(ImageData *, std::exception *)), this,
-            SLOT(onReviewFailure(ImageData *, std::exception *)));
-
-    viewer.show();
-}
-
 static void fromJson(ImageData *data, QJsonDocument doc) {
     QJsonObject root = doc.object();
     QJsonArray json_pictures = root["pictures"].toArray();
@@ -89,6 +74,26 @@ static QJsonDocument toJson(const ImageData *data) {
     doc.setObject(root);
 
     return doc;
+}
+
+
+//
+// Scanner
+//
+
+Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
+    QGuiApplication::setApplicationDisplayName("Foto Scanner");
+
+#if defined(_OPENMP)
+    pool.setMaxThreadCount(1);
+#endif
+
+    connect(&viewer, SIGNAL(success(ImageData *)), this,
+            SLOT(onReviewSuccess(ImageData *)));
+    connect(&viewer, SIGNAL(failure(ImageData *, std::exception *)), this,
+            SLOT(onReviewFailure(ImageData *, std::exception *)));
+
+    viewer.show();
 }
 
 int Scanner::scan() {
@@ -159,6 +164,7 @@ void Scanner::setOutputDir(QString dir) { outputDir = QDir(dir); }
 
 void Scanner::setInputDir(QString dir) { inputDir = QDir(dir); }
 
+// Enqueue now work for all primary tasks (detect -> review -> post-process)
 void Scanner::enqueue() {
     queueLock.lock();
 
@@ -196,6 +202,11 @@ void Scanner::enqueue() {
 
     queueLock.unlock();
 }
+
+
+//
+// Scanner slots
+//
 
 void Scanner::onEventLoopStarted() {
     viewer.statusBar()->showMessage(

@@ -6,7 +6,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
 
 #include <boost/optional.hpp>
 
@@ -21,10 +20,13 @@ using namespace cv;
 using namespace std;
 using namespace boost;
 
-int thresh = 50, N = 11;
-
 typedef vector<Point> Shape;
 typedef vector<Shape> ShapeList;
+
+
+//
+// Detection functionality
+//
 
 // Finds a cosine of angle between vectors from pt0->pt1 and from pt0->pt2
 static double angle(Point pt1, Point pt2, Point pt0) {
@@ -37,6 +39,7 @@ static double angle(Point pt1, Point pt2, Point pt0) {
 }
 
 // Extract a sequence of contours detected in the image.
+int thresh = 50, N = 11;
 ShapeList extractContours(const Mat &image) {
     // down-scale and upscale the image to filter out the noise
     Mat pyr, timg;
@@ -141,6 +144,8 @@ ShapeList filterSquares(const ShapeList &contours,
     return accepts;
 }
 
+// Comparison function for picture partitioning, true if the intersection of
+// two shapes occupies 90% or more of the largest shape
 bool cmp_pictures(const Shape &a, const Shape &b) {
     auto clip = poly_clip(a, b);
     if (clip.size() == 0)
@@ -153,7 +158,8 @@ bool cmp_pictures(const Shape &a, const Shape &b) {
     return a_clip / max(a_a, a_b) > 0.90;
 }
 
-// Partition squares based on the area of their intersection
+// Minimize the amount of squares by partitioning based on the area of overlap
+// and selecting the square with the straightest corners
 ShapeList minimizeSquares(const ShapeList &squares) {
     // partition squares according to the intersection area
     vector<int> labels;
@@ -181,6 +187,11 @@ ShapeList minimizeSquares(const ShapeList &squares) {
 
     return grouped_squares;
 }
+
+
+//
+// Auxiliary conversions (OpenCV to Qt)
+//
 
 static QPolygon toPolygon(Shape shape) {
     QPolygon polygon;
@@ -217,6 +228,7 @@ static QList<QRect> toRectList(ShapeList shapes) {
 DetectionTask::DetectionTask(ImageData *data) : data(data) {}
 
 void DetectionTask::run() {
+    // Lazy-load image data
     try {
         data->load();
     } catch (std::exception *ex) {
@@ -224,10 +236,7 @@ void DetectionTask::run() {
         return;
     }
 
-    ShapeList cv_contours, cv_rejects, cv_ungrouped, cv_pictures;
-
-    auto start = chrono::system_clock::now();
-
+    // Convert to OpenCV format
     Mat mat;
     if (data->image.format() == QImage::Format_RGB32)
         mat = Mat(data->image.height(), data->image.width(), CV_8UC4,
@@ -237,12 +246,16 @@ void DetectionTask::run() {
                      new runtime_error("Could not convert Qt image to OpenCV"));
         return;
     }
-    cv_contours = extractContours(mat);
 
-    cv_ungrouped =
+    auto start = chrono::system_clock::now();
+
+    ShapeList cv_contours = extractContours(mat);
+
+    ShapeList cv_rejects;
+    ShapeList cv_ungrouped =
         filterSquares(cv_contours, optional<ShapeList &>(cv_rejects));
 
-    cv_pictures = minimizeSquares(cv_ungrouped);
+    ShapeList cv_pictures = minimizeSquares(cv_ungrouped);
 
     auto end = chrono::system_clock::now();
     data->elapsed += chrono::duration_cast<chrono::milliseconds>(end - start);

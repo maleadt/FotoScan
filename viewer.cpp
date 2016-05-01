@@ -87,6 +87,11 @@ void Viewer::clear() {
 
 ImageData *Viewer::current() { return data; }
 
+
+//
+// Slots
+//
+
 void Viewer::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (data) {
@@ -132,6 +137,11 @@ void Viewer::showUngrouped() {
 
     updateActions();
 }
+
+
+//
+// Private functionality
+//
 
 void Viewer::updateActions() {
     view->setInteractable(
