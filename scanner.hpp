@@ -5,7 +5,6 @@
 #include <QThreadPool>
 #include <QImage>
 
-#include "detection.hpp"
 #include "viewer.hpp"
 
 #include <chrono>
@@ -37,10 +36,11 @@ class Scanner : public QApplication {
     void onDetectionFailure(ImageData *, std::exception *);
     void onReviewSuccess(ImageData *);
     void onReviewFailure(ImageData *, std::exception *);
+    void onPostprocessSuccess(ImageData *);
+    void onPostprocessFailure(ImageData *, std::exception *);
 
   private:
-    void enqueueDetection();
-    void enqueueReview();
+    void enqueue();
 
     Viewer viewer;
 
@@ -48,4 +48,5 @@ class Scanner : public QApplication {
     QMutex queueLock;
     QList<ImageData *> toDetect;
     QList<ImageData *> toReview;
+    QList<ImageData *> toPostprocess;
 };

@@ -211,7 +211,7 @@ static QList<QRect> toRectList(ShapeList shapes) {
 
 
 //
-// Public interface
+// DetectionTask
 //
 
 DetectionTask::DetectionTask(ImageData *data) : data(data) {}

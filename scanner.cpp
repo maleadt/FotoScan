@@ -8,6 +8,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
+#include "detection.hpp"
+#include "postprocessing.hpp"
+
 // Although limited by QThreadPool, don't have too many detection tasks alive
 // to reduce memory usage and allow the postprocess task to run
 #define DETECTION_BUFFER 8
@@ -140,8 +143,15 @@ int Scanner::scan(QString path) {
             QString("Unable to handle %1").arg(path).toStdString());
 }
 
-void Scanner::enqueueDetection() {
+void Scanner::enqueue() {
     queueLock.lock();
+
+    // review
+    if (viewer.current() == nullptr && toReview.size() > 0) {
+        viewer.display(toReview.takeFirst());
+    }
+
+    // detection
     if (toDetect.size() > 0 && toReview.size() < DETECTION_BUFFER) {
         auto T = new DetectionTask(toDetect.takeFirst());
         connect(T, SIGNAL(success(ImageData *)), this,
@@ -150,22 +160,25 @@ void Scanner::enqueueDetection() {
                 SLOT(onDetectionFailure(ImageData *, std::exception *)));
         pool.start(T, DETECTION_PRIORITY);
     }
-    queueLock.unlock();
-}
 
-void Scanner::enqueueReview() {
-    queueLock.lock();
-    if (viewer.current() == nullptr && toReview.size() > 0) {
-        viewer.display(toReview.takeFirst());
+    // postprocess
+    if (toPostprocess.size() > 0) {
+        auto T = new PostprocessTask(toPostprocess.takeFirst());
+        connect(T, SIGNAL(success(ImageData *)), this,
+                SLOT(onPostprocessSuccess(ImageData *)));
+        connect(T, SIGNAL(failure(ImageData *, std::exception *)), this,
+                SLOT(onPostprocessFailure(ImageData *, std::exception *)));
+        pool.start(T, POSTPROCESS_PRIORITY);
     }
+
     queueLock.unlock();
 }
 
 void Scanner::onEventLoopStarted() {
     viewer.statusBar()->showMessage(
         QString("Loaded %1 image(s)").arg(toDetect.size()));
-    enqueueReview();
-    enqueueDetection();
+
+    enqueue();
 }
 
 void Scanner::onDetectionSuccess(ImageData *data) {
@@ -173,8 +186,7 @@ void Scanner::onDetectionSuccess(ImageData *data) {
     toReview << data;
     queueLock.unlock();
 
-    enqueueReview();
-    enqueueDetection();
+    enqueue();
 }
 
 void Scanner::onDetectionFailure(ImageData *data, std::exception *ex) {
@@ -184,12 +196,13 @@ void Scanner::onDetectionFailure(ImageData *data, std::exception *ex) {
     delete data;
     delete ex;
 
-    enqueueDetection();
+    enqueue();
 }
 
 void Scanner::onReviewSuccess(ImageData *data) {
-    QJsonDocument doc = toJson(data);
+    viewer.clear();
 
+    QJsonDocument doc = toJson(data);
     QFileInfo finfo(data->file);
     QFile results(QString("%1/%2.dat")
                       .arg(finfo.absolutePath())
@@ -203,21 +216,37 @@ void Scanner::onReviewSuccess(ImageData *data) {
                            .arg(results.errorString());
     }
 
-    delete data;
+    queueLock.lock();
+    toPostprocess << data;
+    queueLock.unlock();
 
-    viewer.clear();
-    enqueueReview();
-    enqueueDetection();
+    enqueue();
 }
 
 void Scanner::onReviewFailure(ImageData *data, std::exception *ex) {
+    viewer.clear();
+
     qCritical() << QString("Review for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());
     delete data;
     delete ex;
 
-    viewer.clear();
-    enqueueReview();
-    enqueueDetection();
+    enqueue();
+}
+
+void Scanner::onPostprocessSuccess(ImageData *data) {
+    delete data;
+
+    enqueue();
+}
+
+void Scanner::onPostprocessFailure(ImageData *data, std::exception *ex) {
+    qCritical() << QString("Postprocess for %1 failed: %2")
+                       .arg(data->file)
+                       .arg(ex->what());
+    delete data;
+    delete ex;
+
+    enqueue();
 }
