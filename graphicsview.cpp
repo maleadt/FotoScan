@@ -78,6 +78,7 @@ QGraphicsPolygonItem *GraphicsView::findPolygon(QPoint location) {
 
 void GraphicsView::mousePressEvent(QMouseEvent *event) {
     mousePressPosition = event->pos();
+    mouseMoveEffect = false;
 
     if (event->button() == Qt::LeftButton) {
         setDragMode(QGraphicsView::ScrollHandDrag);
@@ -139,6 +140,7 @@ void GraphicsView::mouseMoveEvent(QMouseEvent *event) {
                 polygon[dragCorner] += delta;
                 selected->setPolygon(polygon);
                 mouseMovePosition = event->pos();
+                mouseMoveEffect = true;
             }
         }
     }
@@ -154,8 +156,9 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent *event) {
         setCursor(Qt::ArrowCursor);
         setDragMode(QGraphicsView::NoDrag);
     } else if (interactable && event->button() == Qt::RightButton) {
-        // right-button click while nothing is selected --> define new polygon
-        if (mouseReleasePosition == mousePressPosition) {
+        if (!mouseMoveEffect &&
+            (mousePressPosition-mouseReleasePosition).manhattanLength() <= 10) {
+            // right-button click while nothing is selected --> define new polygon
             if (!pending && !selected && !selectedAtPress) {
                 // initial point is an ellipse
                 QPen pen(Qt::yellow, 2);

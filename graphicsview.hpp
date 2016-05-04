@@ -29,6 +29,7 @@ class GraphicsView : public QGraphicsView {
     QGraphicsPolygonItem *findPolygon(QPoint location);
 
     QPoint mousePressPosition, mouseMovePosition;
+    bool mouseMoveEffect;
     QGraphicsPolygonItem *selected = nullptr, *selectedAtPress;
     QGraphicsItem *pending = nullptr;
     int dragCorner;
