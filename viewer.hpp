@@ -16,6 +16,7 @@ class Viewer : public QMainWindow {
 
   public:
     Viewer();
+    ~Viewer();
     void display(ImageData *);
     void clear();
     ImageData *current();

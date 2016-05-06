@@ -42,6 +42,11 @@ Viewer::Viewer() : scene(new QGraphicsScene), view(new GraphicsView(scene)) {
     resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
 }
 
+Viewer::~Viewer() {
+    delete scene;
+    delete view;
+}
+
 void Viewer::display(ImageData *data) {
     this->data = data;
     try {

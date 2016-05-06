@@ -175,6 +175,7 @@ void GraphicsView::mouseReleaseEvent(QMouseEvent *event) {
                     pending = scene()->addPolygon(polygon, ellipse_item->pen(),
                                                   ellipse_item->brush());
                     scene()->removeItem(ellipse_item);
+                    delete ellipse_item;
                 }
 
                 QPolygonF polygon;
@@ -205,6 +206,7 @@ void GraphicsView::keyPressEvent(QKeyEvent *event) {
         if (!polygon_item || polygon_item->polygon().size() != 4) {
             // polygon has wrong amount of points
             scene()->removeItem(pending);
+            delete pending;
             selected = nullptr;
             pending = nullptr;
             QMessageBox messageBox;
@@ -224,6 +226,7 @@ void GraphicsView::keyPressEvent(QKeyEvent *event) {
     if (pending &&
         (event->key() == Qt::Key_Escape || event->key() == Qt::Key_Delete)) {
         scene()->removeItem(pending);
+        delete pending;
         selected = nullptr;
         pending = nullptr;
         return;
@@ -232,6 +235,7 @@ void GraphicsView::keyPressEvent(QKeyEvent *event) {
     // delete while selected polygon --> delete
     if (selected && event->key() == Qt::Key_Delete) {
         scene()->removeItem(selected);
+        delete selected;
         selected = nullptr;
         return;
     }

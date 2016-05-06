@@ -192,12 +192,6 @@ void Scanner::enqueue() {
     // review
     if (viewer.current() == nullptr && toReview.size() > 0) {
         auto data = toReview.takeFirst();
-        const QString message =
-            tr("Reviewing \"%1\",detected %2 pictures in %3 ms")
-                .arg(inputDir.relativeFilePath(data->file))
-                .arg(data->pictures.size())
-                .arg(data->elapsed.count());
-        viewer.statusBar()->showMessage(message);
         viewer.display(data);
     }
 
@@ -222,6 +216,15 @@ void Scanner::enqueue() {
     }
 
     queueLock.unlock();
+
+    const QString message =
+        tr("Remaining work: %1 to detect, %2 to review, "
+            "%3 to post-process, %4 currently active")
+            .arg(toDetect.size())
+            .arg(toReview.size())
+            .arg(toPostprocess.size())
+            .arg(pool.activeThreadCount());
+    viewer.statusBar()->showMessage(message);
 }
 
 
@@ -230,9 +233,6 @@ void Scanner::enqueue() {
 //
 
 void Scanner::onEventLoopStarted() {
-    viewer.statusBar()->showMessage(
-        QString("Loaded %1 image(s)").arg(toDetect.size()));
-
     // when correcting results, process the most recently modified one first
     if (mode == ProgramMode::CORRECT_RESULTS) {
         sort(toReview.begin(), toReview.end(),
