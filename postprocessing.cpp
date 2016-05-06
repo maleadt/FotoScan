@@ -48,7 +48,7 @@ void extractPictures(ImageData *data) {
         auto picture = data->pictures[index];
         assert(picture.size() == 4);
 
-        auto bbox = picture.boundingRect();
+        auto bbox = picture.boundingRect() & data->image.rect();
         auto cv_bbox = Rect(bbox.x(), bbox.y(), bbox.width(), bbox.height());
 
         // make sure the polygon is oriented clockwise
