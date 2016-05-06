@@ -217,11 +217,13 @@ void Scanner::enqueue() {
 
     queueLock.unlock();
 
+    // TODO: this is messy, use a proper ETA estimator instead
     size_t reviews_remaining = toDetect.size() + toReview.size();
     auto now = QDateTime::currentDateTime();
     auto done = start.secsTo(now);
     auto reviews_done = reviews - reviews_remaining;
-    auto remaining = done / reviews_done * reviews_remaining;
+    auto remaining =
+        reviews_done != 0 ? done / reviews_done * reviews_remaining : 0;
     auto remaining_hours = remaining/3600;
     auto remaining_minutes = (remaining-3600*remaining_hours)/60;
 

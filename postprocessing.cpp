@@ -240,10 +240,15 @@ Orientation detectSky(const Mat &image) {
 void correctOrientation(ImageData *data) {
     const auto cascades = {
         // listed in order most likely to appear in a photo
+        // (processing bails out as soon as an orientation has been found)
         "/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml",
         "/usr/share/opencv/haarcascades/haarcascade_profileface.xml",
         "/usr/share/opencv/haarcascades/haarcascade_fullbody.xml"};
 
+    unsigned int page_votes[4] = {0, 0, 0, 0};
+    QVector<Orientation> orientations(data->images.size());
+
+    // detect orientation of individual pictures
     for (int i = 0; i < data->images.size(); ++i) {
         auto image = data->images[i];
 
@@ -266,13 +271,16 @@ void correctOrientation(ImageData *data) {
                 throw new runtime_error(
                     "Could not load cascade classifier file");
 
-            // Try 4 different sizes of our photo
-            for (int image_scale = 4; image_scale > 0; image_scale--) {
-                auto newsize = Size(round(grayscale.cols / image_scale),
-                                    round(grayscale.rows / image_scale));
+            // try at different scales to save on processing power
+            for (int scale = 4; scale > 0; scale--) {
+                auto newsize = Size(round(grayscale.cols / scale),
+                                    round(grayscale.rows / scale));
                 Mat scaled;
                 resize(grayscale, scaled, newsize, INTER_LINEAR);
+
                 detectFeatures(scaled, fs, votes);
+
+                // bail out if we have a clear winner
                 if ((winner = clear_winner(votes)) != Orientation::Unknown)
                     goto done;
             }
@@ -283,13 +291,30 @@ void correctOrientation(ImageData *data) {
         if (winner == Orientation::Unknown)
             winner = detectSky(grayscale);
 
-        // apply orientation
-        if (winner != Orientation::Unknown) {
-            Mat rotated = correctOrientation(mat, winner);
-            QImage qt_rotated((uchar *)rotated.data, rotated.cols, rotated.rows,
-                              rotated.step, QImage::Format_RGB32);
-            data->images[i] = qt_rotated.copy();
-        }
+        assert(winner != Orientation::Unknown);
+        page_votes[static_cast<int>(winner)]++;
+        orientations[i] = winner;
+    }
+
+    // check if entire page seems rotated identically
+    Orientation page_winner;
+    if ((page_winner = clear_winner(page_votes)) != Orientation::Unknown) {
+        // if so, force this orientation
+        for (int i = 0; i < data->images.size(); ++i)
+            orientations[i] = page_winner;
+    }
+
+    // apply orientations
+    for (int i = 0; i < data->images.size(); ++i) {
+        // TODO: rotate QImage directly?
+        auto image = data->images[i];
+        Mat mat(image.height(), image.width(), CV_8UC4, image.bits(),
+                image.bytesPerLine());
+
+        Mat rotated = correctOrientation(mat, orientations[i]);
+        QImage qt_rotated((uchar *)rotated.data, rotated.cols, rotated.rows,
+                          rotated.step, QImage::Format_RGB32);
+        data->images[i] = qt_rotated.copy();
     }
 }
 
