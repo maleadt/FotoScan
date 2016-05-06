@@ -94,7 +94,7 @@ static QString getResultPath(QString image) {
 // Scanner
 //
 
-Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv) {
+Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv), start(QDateTime::currentDateTime()) {
     QGuiApplication::setApplicationDisplayName("Foto Scanner");
 
 #if defined(_OPENMP)
@@ -217,13 +217,23 @@ void Scanner::enqueue() {
 
     queueLock.unlock();
 
+    size_t reviews_remaining = toDetect.size() + toReview.size();
+    auto now = QDateTime::currentDateTime();
+    auto done = start.secsTo(now);
+    auto reviews_done = reviews - reviews_remaining;
+    auto remaining = done / reviews_done * reviews_remaining;
+    auto remaining_hours = remaining/3600;
+    auto remaining_minutes = (remaining-3600*remaining_hours)/60;
+
     const QString message =
-        tr("Remaining work: %1 to detect, %2 to review, "
-            "%3 to post-process, %4 currently active")
+        tr("Remaining work: %1 to detect, %2 to review, %3 to post-process, "
+           "%4 currently active (%5h %6m review remaining)")
             .arg(toDetect.size())
             .arg(toReview.size())
             .arg(toPostprocess.size())
-            .arg(pool.activeThreadCount());
+            .arg(pool.activeThreadCount())
+            .arg(remaining_hours)
+            .arg(remaining_minutes);
     viewer.statusBar()->showMessage(message);
 }
 
@@ -234,6 +244,7 @@ void Scanner::enqueue() {
 
 void Scanner::onEventLoopStarted() {
     // when correcting results, process the most recently modified one first
+    reviews = toDetect.size() + toReview.size();
     if (mode == ProgramMode::CORRECT_RESULTS) {
         sort(toReview.begin(), toReview.end(),
              [](const ImageData *a, const ImageData *b) -> bool {

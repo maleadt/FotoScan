@@ -5,6 +5,7 @@
 #include <QThreadPool>
 #include <QImage>
 #include <QDir>
+#include <QDateTime>
 
 #include "viewer.hpp"
 
@@ -65,4 +66,7 @@ class Scanner : public QApplication {
     QList<ImageData *> toDetect;
     QList<ImageData *> toReview;
     QList<ImageData *> toPostprocess;
+
+    QDateTime start;
+    size_t reviews;
 };
