@@ -113,7 +113,7 @@ ShapeList filterSquares(const ShapeList &contours,
             auto area = fabs(contourArea(Mat(approx)));
             if (area < 1000)
                 continue; // truly-reject useless contours
-            if (area < 500000 || area > 10000000)
+            if (area < 500000 || area > 20000000)
                 goto reject;
 
             for (int j = 2; j < 5; j++) {
