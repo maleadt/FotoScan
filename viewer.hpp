@@ -9,7 +9,7 @@ class QGraphicsScene;
 class QGraphicsView;
 class QGraphicsItem;
 class QAction;
-struct ImageData;
+struct ScanData;
 
 class Viewer : public QMainWindow {
     Q_OBJECT
@@ -17,9 +17,9 @@ class Viewer : public QMainWindow {
   public:
     Viewer();
     ~Viewer();
-    void display(ImageData *);
+    void display(ScanData *);
     void clear();
-    ImageData *current();
+    ScanData *current();
 
   protected:
     virtual void keyPressEvent(QKeyEvent *event);
@@ -30,19 +30,19 @@ class Viewer : public QMainWindow {
     void showUngrouped();
 
   signals:
-    void success(ImageData *);
-    void failure(ImageData *, std::exception *);
+    void success(ScanData *);
+    void failure(ScanData *, std::exception *);
 
   private:
     void updateActions();
 
-    ImageData *data = nullptr;
+    ScanData *data = nullptr;
 
     QGraphicsScene *scene;
     GraphicsView *view;
 
     QGraphicsPixmapItem *imageItem = nullptr;
-    QList<QGraphicsItem *> rejectItems, ungroupedItems, pictureItems;
+    QList<QGraphicsItem *> rejectItems, ungroupedItems, shapeItems;
 
     QAction *zoomInAct;
     QAction *zoomOutAct;

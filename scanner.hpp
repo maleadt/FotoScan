@@ -13,18 +13,19 @@
 
 enum class ProgramMode { DEFAULT, CORRECT_RESULTS };
 
-struct ImageData {
+struct ScanData {
     QString file;
     QImage image;
-    ImageData(const QString &file);
+    ScanData(const QString &file);
     void load();
 
     // result of detection
-    // NOTE: actually rects, but easier to represent as 4 points
-    QList<QPolygon> rejects, ungrouped, pictures;
+    // NOTE: `ungrouped` & `shapes` are actually rectangles,
+    //       but are easier to represent as 4 point polygons
+    QList<QPolygon> rejects, ungrouped, shapes;
 
     // result of post-processing
-    QList<QImage> images;
+    QList<QImage> photos;
 
     std::chrono::milliseconds elapsed = std::chrono::milliseconds::zero();
 };
@@ -43,12 +44,12 @@ class Scanner : public QApplication {
     void onEventLoopStarted();
 
   private slots:
-    void onDetectionSuccess(ImageData *);
-    void onDetectionFailure(ImageData *, std::exception *);
-    void onReviewSuccess(ImageData *);
-    void onReviewFailure(ImageData *, std::exception *);
-    void onPostprocessSuccess(ImageData *);
-    void onPostprocessFailure(ImageData *, std::exception *);
+    void onDetectionSuccess(ScanData *);
+    void onDetectionFailure(ScanData *, std::exception *);
+    void onReviewSuccess(ScanData *);
+    void onReviewFailure(ScanData *, std::exception *);
+    void onPostprocessSuccess(ScanData *);
+    void onPostprocessFailure(ScanData *, std::exception *);
 
   private:
     int scan(QString);
@@ -63,9 +64,9 @@ class Scanner : public QApplication {
 
     QThreadPool pool;
     QMutex queueLock;
-    QList<ImageData *> toDetect;
-    QList<ImageData *> toReview;
-    QList<ImageData *> toPostprocess;
+    QList<ScanData *> toDetect;
+    QList<ScanData *> toReview;
+    QList<ScanData *> toPostprocess;
 
     QDateTime start;
     size_t reviews;

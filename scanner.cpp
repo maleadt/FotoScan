@@ -23,12 +23,12 @@ using namespace std;
 
 
 //
-// ImageData
+// ScanData
 //
 
-ImageData::ImageData(const QString &file) : file(file) {}
+ScanData::ScanData(const QString &file) : file(file) {}
 
-void ImageData::load() {
+void ScanData::load() {
     if (image.isNull()) {
         QImageReader reader(file);
         reader.setAutoTransform(true);
@@ -41,35 +41,35 @@ void ImageData::load() {
     }
 }
 
-static void fromJson(ImageData *data, QJsonDocument doc) {
+static void fromJson(ScanData *data, QJsonDocument doc) {
     QJsonObject root = doc.object();
-    QJsonArray json_pictures = root["pictures"].toArray();
-    for (auto json_picture_obj : json_pictures) {
-        auto json_picture = json_picture_obj.toArray();
-        QPolygon picture;
-        for (auto json_point_obj : json_picture) {
-            auto json_point = json_point_obj.toObject();
-            picture << QPoint(json_point["x"].toInt(), json_point["y"].toInt());
+    QJsonArray json_shapes = root["pictures"].toArray();
+    for (auto json_shape_obj : json_shapes) {
+        auto json_shape = json_shape_obj.toArray();
+        QPolygon shape;
+        for (auto json_shape_obj : json_shape) {
+            auto json_point = json_shape_obj.toObject();
+            shape << QPoint(json_point["x"].toInt(), json_point["y"].toInt());
         }
-        data->pictures << picture;
+        data->shapes << shape;
     }
 }
 
-static QJsonDocument toJson(const ImageData *data) {
-    QJsonArray json_pictures;
-    for (auto picture : data->pictures) {
-        QJsonArray json_picture;
-        for (auto point : picture) {
+static QJsonDocument toJson(const ScanData *data) {
+    QJsonArray json_shapes;
+    for (auto shape : data->shapes) {
+        QJsonArray json_shape;
+        for (auto point : shape) {
             QJsonObject json_point;
             json_point["x"] = point.x();
             json_point["y"] = point.y();
-            json_picture << json_point;
+            json_shape << json_point;
         }
-        json_pictures << json_picture;
+        json_shapes << json_shape;
     }
 
     QJsonObject root;
-    root["pictures"] = json_pictures;
+    root["pictures"] = json_shapes;
 
     QJsonDocument doc;
     doc.setObject(root);
@@ -101,10 +101,10 @@ Scanner::Scanner(int &argc, char **argv) : QApplication(argc, argv), start(QDate
     pool.setMaxThreadCount(1);
 #endif
 
-    connect(&viewer, SIGNAL(success(ImageData *)), this,
-            SLOT(onReviewSuccess(ImageData *)));
-    connect(&viewer, SIGNAL(failure(ImageData *, std::exception *)), this,
-            SLOT(onReviewFailure(ImageData *, std::exception *)));
+    connect(&viewer, SIGNAL(success(ScanData *)), this,
+            SLOT(onReviewSuccess(ScanData *)));
+    connect(&viewer, SIGNAL(failure(ScanData *, std::exception *)), this,
+            SLOT(onReviewFailure(ScanData *, std::exception *)));
 
     viewer.show();
 }
@@ -141,7 +141,7 @@ int Scanner::scan(QString path) {
                 QString json = results.readAll();
                 QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
 
-                ImageData *data = new ImageData(path);
+                ScanData *data = new ScanData(path);
                 fromJson(data, doc);
 
                 queueLock.lock();
@@ -157,7 +157,7 @@ int Scanner::scan(QString path) {
             }
         } else if (mode != ProgramMode::CORRECT_RESULTS) {
             queueLock.lock();
-            toDetect << new ImageData(path);
+            toDetect << new ScanData(path);
             queueLock.unlock();
         }
         return 1;
@@ -198,20 +198,20 @@ void Scanner::enqueue() {
     // detection
     if (toDetect.size() > 0 && toReview.size() < DETECTION_BUFFER) {
         auto T = new DetectionTask(toDetect.takeFirst());
-        connect(T, SIGNAL(success(ImageData *)), this,
-                SLOT(onDetectionSuccess(ImageData *)));
-        connect(T, SIGNAL(failure(ImageData *, std::exception *)), this,
-                SLOT(onDetectionFailure(ImageData *, std::exception *)));
+        connect(T, SIGNAL(success(ScanData *)), this,
+                SLOT(onDetectionSuccess(ScanData *)));
+        connect(T, SIGNAL(failure(ScanData *, std::exception *)), this,
+                SLOT(onDetectionFailure(ScanData *, std::exception *)));
         pool.start(T, DETECTION_PRIORITY);
     }
 
     // postprocess
     if (toPostprocess.size() > 0) {
         auto T = new PostprocessTask(toPostprocess.takeFirst());
-        connect(T, SIGNAL(success(ImageData *)), this,
-                SLOT(onPostprocessSuccess(ImageData *)));
-        connect(T, SIGNAL(failure(ImageData *, std::exception *)), this,
-                SLOT(onPostprocessFailure(ImageData *, std::exception *)));
+        connect(T, SIGNAL(success(ScanData *)), this,
+                SLOT(onPostprocessSuccess(ScanData *)));
+        connect(T, SIGNAL(failure(ScanData *, std::exception *)), this,
+                SLOT(onPostprocessFailure(ScanData *, std::exception *)));
         pool.start(T, POSTPROCESS_PRIORITY);
     }
 
@@ -249,7 +249,7 @@ void Scanner::onEventLoopStarted() {
     reviews = toDetect.size() + toReview.size();
     if (mode == ProgramMode::CORRECT_RESULTS) {
         sort(toReview.begin(), toReview.end(),
-             [](const ImageData *a, const ImageData *b) -> bool {
+             [](const ScanData *a, const ScanData *b) -> bool {
                  return QFileInfo(getResultPath(a->file)).lastModified() >
                         QFileInfo(getResultPath(b->file)).lastModified();
              });
@@ -258,7 +258,7 @@ void Scanner::onEventLoopStarted() {
     enqueue();
 }
 
-void Scanner::onDetectionSuccess(ImageData *data) {
+void Scanner::onDetectionSuccess(ScanData *data) {
     queueLock.lock();
     toReview << data;
     queueLock.unlock();
@@ -266,7 +266,7 @@ void Scanner::onDetectionSuccess(ImageData *data) {
     enqueue();
 }
 
-void Scanner::onDetectionFailure(ImageData *data, exception *ex) {
+void Scanner::onDetectionFailure(ScanData *data, exception *ex) {
     qCritical() << QString("Detection for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());
@@ -276,7 +276,7 @@ void Scanner::onDetectionFailure(ImageData *data, exception *ex) {
     enqueue();
 }
 
-void Scanner::onReviewSuccess(ImageData *data) {
+void Scanner::onReviewSuccess(ScanData *data) {
     viewer.clear();
 
     QFileInfo finfo(data->file);
@@ -298,7 +298,7 @@ void Scanner::onReviewSuccess(ImageData *data) {
     enqueue();
 }
 
-void Scanner::onReviewFailure(ImageData *data, exception *ex) {
+void Scanner::onReviewFailure(ScanData *data, exception *ex) {
     viewer.clear();
 
     qCritical() << QString("Review for %1 failed: %2")
@@ -310,14 +310,14 @@ void Scanner::onReviewFailure(ImageData *data, exception *ex) {
     enqueue();
 }
 
-void Scanner::onPostprocessSuccess(ImageData *data) {
+void Scanner::onPostprocessSuccess(ScanData *data) {
     QImageReader reader(data->file);
 
     QString relative_input = inputDir.relativeFilePath(data->file);
     QString output = outputDir.absoluteFilePath(relative_input);
     QFileInfo finfo(output);
-    for (int i = 0; i < data->images.size(); ++i) {
-        auto image = data->images[i];
+    for (int i = 0; i < data->photos.size(); ++i) {
+        auto photo = data->photos[i];
         QDir output_dir(finfo.absolutePath());
         QFile output_split(
             output_dir.absoluteFilePath(QString("%1_%2.%3")
@@ -327,7 +327,7 @@ void Scanner::onPostprocessSuccess(ImageData *data) {
         QString output_split_path = QFileInfo(output_split).absoluteFilePath();
         QDir().mkpath(QFileInfo(output_split).absolutePath());
         QImageWriter writer(output_split_path, reader.format());
-        if (!writer.write(image)) {
+        if (!writer.write(photo)) {
             qCritical() << QString("Saving %1 failed: %2")
                                .arg(output_split_path)
                                .arg(writer.errorString());
@@ -339,7 +339,7 @@ void Scanner::onPostprocessSuccess(ImageData *data) {
     enqueue();
 }
 
-void Scanner::onPostprocessFailure(ImageData *data, exception *ex) {
+void Scanner::onPostprocessFailure(ScanData *data, exception *ex) {
     qCritical() << QString("Postprocess for %1 failed: %2")
                        .arg(data->file)
                        .arg(ex->what());

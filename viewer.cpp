@@ -47,7 +47,7 @@ Viewer::~Viewer() {
     delete view;
 }
 
-void Viewer::display(ImageData *data) {
+void Viewer::display(ScanData *data) {
     this->data = data;
     try {
         data->load();
@@ -73,8 +73,8 @@ void Viewer::display(ImageData *data) {
     showUngrouped();
 
     pen = QPen(Qt::green, 10);
-    for (auto polygon : data->pictures)
-        pictureItems << scene->addPolygon(polygon, pen);
+    for (auto polygon : data->shapes)
+        shapeItems << scene->addPolygon(polygon, pen);
 
     view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
     updateActions();
@@ -86,13 +86,13 @@ void Viewer::clear() {
     data = nullptr;
     rejectItems.clear();
     ungroupedItems.clear();
-    pictureItems.clear();
+    shapeItems.clear();
 
     scene->clear(); // This deletes the actual items
     view->clear();
 }
 
-ImageData *Viewer::current() { return data; }
+ScanData *Viewer::current() { return data; }
 
 
 //
@@ -102,18 +102,18 @@ ImageData *Viewer::current() { return data; }
 void Viewer::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (data) {
-            // only make pictures visible
+            // only make valid shapes visible
             showRejectsAct->setChecked(false);
             showRejects();
             showUngroupedAct->setChecked(false);
             showUngrouped();
 
-            data->pictures = QList<QPolygon>();
+            data->shapes = QList<QPolygon>();
             for (auto item : scene->items())
                 if (item->isVisible())
                     if (auto polygon_item =
                             qgraphicsitem_cast<QGraphicsPolygonItem *>(item))
-                        data->pictures << polygon_item->polygon().toPolygon();
+                        data->shapes << polygon_item->polygon().toPolygon();
 
             emit success(data);
             return;

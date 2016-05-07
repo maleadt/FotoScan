@@ -33,7 +33,7 @@ static bool isClockwise(const QPolygon &polygon) {
 // Detection
 //
 
-void extractPictures(ImageData *data) {
+void extractPhotos(ScanData *data) {
     // convert to OpenCV format
     Mat mat;
     if (data->image.format() == QImage::Format_RGB32)
@@ -44,39 +44,39 @@ void extractPictures(ImageData *data) {
     }
 
     #pragma omp parallel for
-    for (int index = 0; index < data->pictures.size(); ++index) {
-        auto picture = data->pictures[index];
-        assert(picture.size() == 4);
+    for (int index = 0; index < data->shapes.size(); ++index) {
+        auto shape = data->shapes[index];
+        assert(shape.size() == 4);
 
-        auto bbox = picture.boundingRect() & data->image.rect();
+        auto bbox = shape.boundingRect() & data->image.rect();
         auto cv_bbox = Rect(bbox.x(), bbox.y(), bbox.width(), bbox.height());
 
         // make sure the polygon is oriented clockwise
-        if (!isClockwise(picture))
-            reverse(picture.begin(), picture.end());
+        if (!isClockwise(shape))
+            reverse(shape.begin(), shape.end());
 
         // move the top-left point to the start of the polygon
         int topleft = 0;
         int topleft_distance = numeric_limits<int>::max();
-        for (int i = 0; i < picture.size(); i++) {
-            float distance = (bbox.topLeft() - picture[i]).manhattanLength();
+        for (int i = 0; i < shape.size(); i++) {
+            float distance = (bbox.topLeft() - shape[i]).manhattanLength();
             if (distance < topleft_distance) {
                 topleft = i;
                 topleft_distance = distance;
             }
         }
-        rotate(picture.begin(), picture.begin() + topleft, picture.end());
+        rotate(shape.begin(), shape.begin() + topleft, shape.end());
 
-        // extract the picture's submatrix
+        // extract the shape's submatrix
         const Mat sub_mat = mat(cv_bbox);
         QPolygon sub_polygon = QPolygon(bbox);
         QPoint sub_offset = bbox.topLeft();
 
         // create the transformation matrix
         Point2f srcTri[4];
-        for (int i = 0; i < picture.size(); i++)
-            srcTri[i] = Point(picture[i].x() - sub_offset.x(),
-                              picture[i].y() - sub_offset.y());
+        for (int i = 0; i < shape.size(); i++)
+            srcTri[i] = Point(shape[i].x() - sub_offset.x(),
+                              shape[i].y() - sub_offset.y());
         Point2f dstTri[4];
         for (int i = 0; i < sub_polygon.size(); i++)
             dstTri[i] = Point(sub_polygon[i].x() - sub_offset.x(),
@@ -91,7 +91,7 @@ void extractPictures(ImageData *data) {
             QImage((uchar *)sub_warped.data, sub_warped.cols, sub_warped.rows,
                    sub_warped.step, data->image.format());
         #pragma omp critical
-        data->images << qt_output.copy();
+        data->photos << qt_output.copy();
     }
 }
 
@@ -99,9 +99,9 @@ enum class Orientation {
     Unknown = -1,
 
     Correct = 0,
-    Clockwise = 1, // image is rotated to the right
+    Clockwise = 1, // photo is rotated to the right
     Flipped = 2,
-    Counterclockwise = 3 // image is rotated to the left
+    Counterclockwise = 3 // photo is rotated to the left
 };
 
 QDebug operator<<(QDebug d, const Orientation &orientation) {
@@ -236,8 +236,8 @@ Orientation detectSky(const Mat &image) {
     return static_cast<Orientation>(winner);
 }
 
-// Detect and correct the orientation of all images
-void correctOrientation(ImageData *data) {
+// Detect and correct the orientation of all photos
+void correctOrientation(ScanData *data) {
     const auto cascades = {
         // listed in order most likely to appear in a photo
         // (processing bails out as soon as an orientation has been found)
@@ -246,17 +246,17 @@ void correctOrientation(ImageData *data) {
         "/usr/share/opencv/haarcascades/haarcascade_fullbody.xml"};
 
     unsigned int page_votes[4] = {0, 0, 0, 0};
-    QVector<Orientation> orientations(data->images.size());
+    QVector<Orientation> orientations(data->photos.size());
 
-    // detect orientation of individual pictures
-    for (int i = 0; i < data->images.size(); ++i) {
-        auto image = data->images[i];
+    // detect orientation of individual photos
+    for (int i = 0; i < data->photos.size(); ++i) {
+        auto photo = data->photos[i];
 
         // convert to OpenCV format
         Mat mat;
-        if (image.format() == QImage::Format_RGB32)
-            mat = Mat(image.height(), image.width(), CV_8UC4, image.bits(),
-                      image.bytesPerLine());
+        if (photo.format() == QImage::Format_RGB32)
+            mat = Mat(photo.height(), photo.width(), CV_8UC4, photo.bits(),
+                      photo.bytesPerLine());
         else
             throw new runtime_error("Could not convert Qt image to OpenCV");
         Mat grayscale;
@@ -300,21 +300,21 @@ void correctOrientation(ImageData *data) {
     Orientation page_winner;
     if ((page_winner = clear_winner(page_votes)) != Orientation::Unknown) {
         // if so, force this orientation
-        for (int i = 0; i < data->images.size(); ++i)
+        for (int i = 0; i < data->photos.size(); ++i)
             orientations[i] = page_winner;
     }
 
     // apply orientations
-    for (int i = 0; i < data->images.size(); ++i) {
+    for (int i = 0; i < data->photos.size(); ++i) {
         // TODO: rotate QImage directly?
-        auto image = data->images[i];
-        Mat mat(image.height(), image.width(), CV_8UC4, image.bits(),
-                image.bytesPerLine());
+        auto photo = data->photos[i];
+        Mat mat(photo.height(), photo.width(), CV_8UC4, photo.bits(),
+                photo.bytesPerLine());
 
         Mat rotated = correctOrientation(mat, orientations[i]);
         QImage qt_rotated((uchar *)rotated.data, rotated.cols, rotated.rows,
                           rotated.step, QImage::Format_RGB32);
-        data->images[i] = qt_rotated.copy();
+        data->photos[i] = qt_rotated.copy();
     }
 }
 
@@ -323,7 +323,7 @@ void correctOrientation(ImageData *data) {
 // PostprocessTask
 //
 
-PostprocessTask::PostprocessTask(ImageData *data) : data(data) {}
+PostprocessTask::PostprocessTask(ScanData *data) : data(data) {}
 
 void PostprocessTask::run() {
     // Lazy-load image data
@@ -337,7 +337,7 @@ void PostprocessTask::run() {
     auto start = chrono::system_clock::now();
 
     try {
-        extractPictures(data);
+        extractPhotos(data);
         correctOrientation(data);
     } catch (runtime_error *ex) {
         emit failure(data, ex);

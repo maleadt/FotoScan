@@ -13,12 +13,12 @@ int main(int argc, char *argv[]) {
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("INPUT-DIRECTORY",
-                                 "Path to scan for pictures.");
+                                 "Path to scan for images.");
 
     QCommandLineOption outputDirectoryOption(
         QStringList() << "o"
                       << "output-directory",
-        "Write images to <directory>.", "directory");
+        "Write photos to <directory>.", "directory");
     parser.addOption(outputDirectoryOption);
 
     QCommandLineOption correctOption(QStringList() << "c"

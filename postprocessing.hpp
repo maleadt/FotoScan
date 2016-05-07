@@ -3,19 +3,19 @@
 #include <QObject>
 #include <QRunnable>
 
-struct ImageData;
+struct ScanData;
 
 class PostprocessTask : public QObject, public QRunnable {
     Q_OBJECT
 
   public:
-    PostprocessTask(ImageData *data);
+    PostprocessTask(ScanData *data);
     void run();
 
   signals:
-    void success(ImageData *);
-    void failure(ImageData *, std::exception *);
+    void success(ScanData *);
+    void failure(ScanData *, std::exception *);
 
   private:
-    ImageData *data;
+    ScanData *data;
 };

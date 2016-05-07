@@ -4,19 +4,19 @@
 #include <QRunnable>
 #include <QString>
 
-struct ImageData;
+struct ScanData;
 
 class DetectionTask : public QObject, public QRunnable {
     Q_OBJECT
 
   public:
-    DetectionTask(ImageData *);
+    DetectionTask(ScanData *);
     void run();
 
   signals:
-    void success(ImageData *);
-    void failure(ImageData *, std::exception *);
+    void success(ScanData *);
+    void failure(ScanData *, std::exception *);
 
   private:
-    ImageData *data;
+    ScanData *data;
 };

@@ -210,7 +210,7 @@ void GraphicsView::keyPressEvent(QKeyEvent *event) {
             selected = nullptr;
             pending = nullptr;
             QMessageBox messageBox;
-            messageBox.critical(0, "Error", "Picture should have 4 corners");
+            messageBox.critical(0, "Error", "Picture shape should have 4 corners");
             return;
         }
 

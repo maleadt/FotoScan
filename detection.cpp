@@ -88,7 +88,7 @@ ShapeList extractContours(const Mat &image) {
 }
 
 // Filter the squares from a list of contours
-ShapeList filterSquares(const ShapeList &contours,
+ShapeList filterShapes(const ShapeList &contours,
                         optional<ShapeList &> rejects) {
     ShapeList accepts;
 
@@ -144,9 +144,9 @@ ShapeList filterSquares(const ShapeList &contours,
     return accepts;
 }
 
-// Comparison function for picture partitioning, true if the intersection of
+// Comparison function for share partitioning, true if the intersection of
 // two shapes occupies 90% or more of the largest shape
-bool cmp_pictures(const Shape &a, const Shape &b) {
+bool cmp_shape(const Shape &a, const Shape &b) {
     auto clip = poly_clip(a, b);
     if (clip.size() == 0)
         return false;
@@ -158,30 +158,30 @@ bool cmp_pictures(const Shape &a, const Shape &b) {
     return a_clip / max(a_a, a_b) > 0.90;
 }
 
-// Minimize the amount of squares by partitioning based on the area of overlap
+// Minimize the amount of shapes by partitioning based on the area of overlap
 // and selecting the square with the straightest corners
-ShapeList minimizeSquares(const ShapeList &squares) {
-    // partition squares according to the intersection area
+ShapeList minimizeShapes(const ShapeList &shapes) {
+    // partition shapes according to the intersection area
     vector<int> labels;
-    int groups = partition(squares, labels, cmp_pictures);
+    int groups = partition(shapes, labels, cmp_shape);
 
-    // for each group, select picture with straightest corners
+    // for each group, select shape with straightest corners
     ShapeList grouped_squares(groups);
     vector<float> minCosines(groups);
-    for (size_t i = 0; i < squares.size(); i++) {
+    for (size_t i = 0; i < shapes.size(); i++) {
         int group = labels[i];
 
         // find the minimum cosine of the angle between joint edges
         double minCosine = std::numeric_limits<double>::max();
         for (int j = 2; j < 5; j++) {
             double cosine = fabs(
-                angle(squares[i][j % 4], squares[i][j - 2], squares[i][j - 1]));
+                angle(shapes[i][j % 4], shapes[i][j - 2], shapes[i][j - 1]));
             minCosine = min(minCosine, cosine);
         }
 
         if (grouped_squares[group].size() == 0 ||
             minCosine < minCosines[group]) {
-            grouped_squares[group] = squares[i];
+            grouped_squares[group] = shapes[i];
             minCosines[group] = minCosine;
         }
     }
@@ -226,7 +226,7 @@ static QList<QRect> toRectList(ShapeList shapes) {
 // DetectionTask
 //
 
-DetectionTask::DetectionTask(ImageData *data) : data(data) {}
+DetectionTask::DetectionTask(ScanData *data) : data(data) {}
 
 void DetectionTask::run() {
     // Lazy-load image data
@@ -254,16 +254,16 @@ void DetectionTask::run() {
 
     ShapeList cv_rejects;
     ShapeList cv_ungrouped =
-        filterSquares(cv_contours, optional<ShapeList &>(cv_rejects));
+        filterShapes(cv_contours, optional<ShapeList &>(cv_rejects));
 
-    ShapeList cv_pictures = minimizeSquares(cv_ungrouped);
+    ShapeList cv_shapes = minimizeShapes(cv_ungrouped);
 
     auto end = chrono::system_clock::now();
     data->elapsed += chrono::duration_cast<chrono::milliseconds>(end - start);
 
     data->rejects = toPolygonList(cv_rejects);
     data->ungrouped = toPolygonList(cv_ungrouped);
-    data->pictures = toPolygonList(cv_pictures);
+    data->shapes = toPolygonList(cv_shapes);
 
     emit success(data);
 }
