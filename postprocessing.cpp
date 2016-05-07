@@ -48,8 +48,9 @@ void extractPhotos(ScanData *data) {
         auto shape = data->shapes[index];
         assert(shape.size() == 4);
 
+        // start working with the bounding box -- this can be significantly
+        // larger than the photo itself, eg. when it is rotated
         auto bbox = shape.boundingRect() & data->image.rect();
-        auto cv_bbox = Rect(bbox.x(), bbox.y(), bbox.width(), bbox.height());
 
         // make sure the polygon is oriented clockwise
         if (!isClockwise(shape))
@@ -67,29 +68,47 @@ void extractPhotos(ScanData *data) {
         }
         rotate(shape.begin(), shape.begin() + topleft, shape.end());
 
-        // extract the shape's submatrix
-        const Mat sub_mat = mat(cv_bbox);
-        QPolygon sub_polygon = QPolygon(bbox);
-        QPoint sub_offset = bbox.topLeft();
+        // extract the image data (coarsely, given its bounding box)
+        const Mat submat_coarse =
+            mat(Rect(bbox.x(), bbox.y(), bbox.width(), bbox.height()));
+        QPoint submat_offset = bbox.topLeft();
+
+        // figure out a destination rectangle to warp the image to
+        // NOTE: can't just use the bounding box, because its aspect ratio can
+        //       be completely different when dealing with a rotated image
+        double width =
+            (hypot(shape[0].x() - shape[1].x(), shape[0].y() - shape[1].y()) +
+             hypot(shape[2].x() - shape[3].x(), shape[2].y() - shape[3].y())) /
+            2.;
+        double height =
+            (hypot(shape[1].x() - shape[2].x(), shape[1].y() - shape[2].y()) +
+             hypot(shape[3].x() - shape[0].x(), shape[3].y() - shape[0].y())) /
+            2.;
+        QRect dest(0, 0, width, height);
 
         // create the transformation matrix
-        Point2f srcTri[4];
+        Point2f srcPts[4];
         for (int i = 0; i < shape.size(); i++)
-            srcTri[i] = Point(shape[i].x() - sub_offset.x(),
-                              shape[i].y() - sub_offset.y());
-        Point2f dstTri[4];
-        for (int i = 0; i < sub_polygon.size(); i++)
-            dstTri[i] = Point(sub_polygon[i].x() - sub_offset.x(),
-                              sub_polygon[i].y() - sub_offset.y());
-        auto warp_mat = getPerspectiveTransform(srcTri, dstTri);
+            srcPts[i] = Point(shape[i].x() - submat_offset.x(),
+                              shape[i].y() - submat_offset.y());
+        Point2f dstPts[4];
+        for (int i = 0; i < 4; i++)
+            dstPts[i] = Point(QPolygon(dest)[i].x(), QPolygon(dest)[i].y());
+        auto warp_mat = getPerspectiveTransform(srcPts, dstPts);
 
         // perform the actual transform
-        Mat sub_warped = Mat::zeros(sub_mat.rows, sub_mat.cols, sub_mat.type());
-        warpPerspective(sub_mat, sub_warped, warp_mat, sub_warped.size());
+        Mat sub_warped = Mat::zeros(submat_coarse.rows, submat_coarse.cols,
+                                    submat_coarse.type());
+        warpPerspective(submat_coarse, sub_warped, warp_mat, sub_warped.size());
+
+        // extract the image data (exactly now, which is only possible after
+        // having warped the image)
+        const Mat submat_fine =
+            sub_warped(Rect(dest.x(), dest.y(), dest.width(), dest.height()));
 
         const auto qt_output =
-            QImage((uchar *)sub_warped.data, sub_warped.cols, sub_warped.rows,
-                   sub_warped.step, data->image.format());
+            QImage((uchar *)submat_fine.data, submat_fine.cols,
+                   submat_fine.rows, submat_fine.step, data->image.format());
         #pragma omp critical
         data->photos << qt_output.copy();
     }

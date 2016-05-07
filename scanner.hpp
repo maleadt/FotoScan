@@ -20,8 +20,7 @@ struct ScanData {
     void load();
 
     // result of detection
-    // NOTE: `ungrouped` & `shapes` are actually rectangles,
-    //       but are easier to represent as 4 point polygons
+    // NOTE: `ungrouped` & `shapes` are actually quads (Polygon <: Quad <: Rect)
     QList<QPolygon> rejects, ungrouped, shapes;
 
     // result of post-processing
