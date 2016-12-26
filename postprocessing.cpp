@@ -257,12 +257,19 @@ Orientation detectSky(const Mat &image) {
 
 // Detect and correct the orientation of all photos
 void correctOrientation(ScanData *data) {
+    QDir appdir = QDir(QCoreApplication::applicationDirPath());
     const auto cascades = {
         // listed in order most likely to appear in a photo
         // (processing bails out as soon as an orientation has been found)
-        "/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml",
-        "/usr/share/opencv/haarcascades/haarcascade_profileface.xml",
-        "/usr/share/opencv/haarcascades/haarcascade_fullbody.xml"};
+        //// Arch Linux paths
+        QFileInfo("/usr/share/opencv/haarcascades/haarcascade_frontalface_alt.xml"),
+        QFileInfo("/usr/share/opencv/haarcascades/haarcascade_profileface.xml"),
+        QFileInfo("/usr/share/opencv/haarcascades/haarcascade_fullbody.xml"),
+        //// Shipped files
+        QFileInfo(appdir, "haarcascades/haarcascade_frontalface_alt.xml"),
+        QFileInfo(appdir, "haarcascades/haarcascade_profileface.xml"),
+        QFileInfo(appdir, "haarcascades/haarcascade_fullbody.xml"),
+        };
 
     unsigned int page_votes[4] = {0, 0, 0, 0};
     QVector<Orientation> orientations(data->photos.size());
@@ -285,10 +292,9 @@ void correctOrientation(ScanData *data) {
         unsigned int votes[4] = {0, 0, 0, 0};
         Orientation winner;
         for (auto cascade : cascades) {
-            FileStorage fs(cascade, FileStorage::READ);
+            FileStorage fs(cascade.absoluteFilePath().toLatin1().data(), FileStorage::READ);
             if (!fs.isOpened())
-                throw new runtime_error(
-                    "Could not load cascade classifier file");
+                continue;
 
             // try at different scales to save on processing power
             for (int scale = 4; scale > 0; scale--) {
@@ -304,6 +310,8 @@ void correctOrientation(ScanData *data) {
                     goto done;
             }
         }
+        throw new runtime_error("Could not load any cascade classifier file");
+
     done:
 
         // detect orientation from sky, if necessary
