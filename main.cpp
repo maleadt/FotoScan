@@ -1,6 +1,8 @@
 #include <QCommandLineParser>
 #include <QTimer>
 
+#include <QMessageBox>
+
 #include "scanner.hpp"
 
 int main(int argc, char *argv[]) {
@@ -34,7 +36,10 @@ int main(int argc, char *argv[]) {
 
     const QStringList args = parser.positionalArguments();
     if (args.size() != 1) {
-        qFatal("Need exactly 1 input directory");
+        QMessageBox::critical(nullptr, "Invalid usage",
+                              QString("Try `%0 --help` for more information.")
+                              .arg(QFileInfo(QCoreApplication::applicationFilePath()).fileName()));
+        return 1;
     }
     app.setInputDir(args[0]);
     app.scan();

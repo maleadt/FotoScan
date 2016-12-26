@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDateTime>
+#include <QMessageBox>
 
 #include "detection.hpp"
 #include "postprocessing.hpp"
@@ -151,9 +152,10 @@ int Scanner::scan(QString path) {
                     toPostprocess << data;
                 queueLock.unlock();
             } else {
-                qCritical() << QString("Could not read results for %1: %2")
-                                   .arg(path)
-                                   .arg(results.errorString());
+                QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                                      QString("Could not read results for %1: %2")
+                                      .arg(path)
+                                      .arg(results.errorString()));
             }
         } else if (mode != ProgramMode::CORRECT_RESULTS) {
             queueLock.lock();
@@ -267,9 +269,11 @@ void Scanner::onDetectionSuccess(ScanData *data) {
 }
 
 void Scanner::onDetectionFailure(ScanData *data, exception *ex) {
-    qCritical() << QString("Detection for %1 failed: %2")
-                       .arg(data->file)
-                       .arg(ex->what());
+    QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                          QString("Detection for %1 failed: %2")
+                          .arg(data->file)
+                          .arg(ex->what()));
+
     delete data;
     delete ex;
 
@@ -286,9 +290,10 @@ void Scanner::onReviewSuccess(ScanData *data) {
         QJsonDocument doc = toJson(data);
         stream << doc.toJson();
     } else {
-        qCritical() << QString("Could not write results for %1: %2")
-                           .arg(data->file)
-                           .arg(results.errorString());
+        QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                              QString("Could not write results for %1: %2")
+                              .arg(data->file)
+                              .arg(results.errorString()));
     }
 
     queueLock.lock();
@@ -301,9 +306,11 @@ void Scanner::onReviewSuccess(ScanData *data) {
 void Scanner::onReviewFailure(ScanData *data, exception *ex) {
     viewer.clear();
 
-    qCritical() << QString("Review for %1 failed: %2")
-                       .arg(data->file)
-                       .arg(ex->what());
+    QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                          QString("Review for %1 failed: %2")
+                          .arg(data->file)
+                          .arg(ex->what()));
+
     delete data;
     delete ex;
 
@@ -328,9 +335,10 @@ void Scanner::onPostprocessSuccess(ScanData *data) {
         QDir().mkpath(QFileInfo(output_split).absolutePath());
         QImageWriter writer(output_split_path, reader.format());
         if (!writer.write(photo)) {
-            qCritical() << QString("Saving %1 failed: %2")
-                               .arg(output_split_path)
-                               .arg(writer.errorString());
+            QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                                  QString("Saving %1 failed: %2")
+                                  .arg(output_split_path)
+                                  .arg(writer.errorString()) );
         }
     }
 
@@ -340,9 +348,11 @@ void Scanner::onPostprocessSuccess(ScanData *data) {
 }
 
 void Scanner::onPostprocessFailure(ScanData *data, exception *ex) {
-    qCritical() << QString("Postprocess for %1 failed: %2")
-                       .arg(data->file)
-                       .arg(ex->what());
+    QMessageBox::critical(qobject_cast<QWidget *> (parent()), "Error",
+                          QString("Postprocess for %1 failed: %2")
+                          .arg(data->file)
+                          .arg(ex->what()));
+
     delete data;
     delete ex;
 
