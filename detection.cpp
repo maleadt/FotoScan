@@ -7,8 +7,6 @@
 #include <opencv2/objdetect/objdetect.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include <boost/optional.hpp>
-
 #include <iostream>
 #include <cmath>
 #include <chrono>
@@ -18,7 +16,6 @@
 
 using namespace cv;
 using namespace std;
-using namespace boost;
 
 typedef vector<Point> Shape;
 typedef vector<Shape> ShapeList;
@@ -89,7 +86,7 @@ ShapeList extractContours(const Mat &image) {
 
 // Filter the squares from a list of contours
 ShapeList filterShapes(const ShapeList &contours,
-                        optional<ShapeList &> rejects) {
+                        ShapeList & rejects) {
     ShapeList accepts;
 
     // test each contour
@@ -134,10 +131,8 @@ ShapeList filterShapes(const ShapeList &contours,
             continue;
 
         reject:
-            if (rejects) {
-                #pragma omp critical(rejects)
-                (*rejects).push_back(approx);
-            }
+            #pragma omp critical(rejects)
+            rejects.push_back(approx);
         }
     }
 
@@ -254,7 +249,7 @@ void DetectionTask::run() {
 
     ShapeList cv_rejects;
     ShapeList cv_ungrouped =
-        filterShapes(cv_contours, optional<ShapeList &>(cv_rejects));
+        filterShapes(cv_contours, cv_rejects);
 
     ShapeList cv_shapes = minimizeShapes(cv_ungrouped);
 
